@@ -40,7 +40,7 @@ class NumatoRelayInterface:
             state = True
             response = "Turn on relay"
 
-        elif ((response.find("off") > 0) and (!req.data)):
+        elif ((response.find("off") > 0) and (req.data == False)):
             state = True
             response = "Turn off relay"
         else:
