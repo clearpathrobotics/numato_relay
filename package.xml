@@ -12,6 +12,8 @@
 
   <exec_depend>python-serial</exec_depend>
   <exec_depend>rospy</exec_depend>
+  <exec_depend>std_msgs</exec_depend>
+  <exec_depend>std_srvs</exec_depend>
 
   <test_depend>roslint</test_depend>
 

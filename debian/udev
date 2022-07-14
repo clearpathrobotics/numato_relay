@@ -1,0 +1,1 @@
+SUBSYSTEM=="tty", SUBSYSTEMS=="usb", ATTRS{idVendor}=="2a19", ATTRS{idProduct}=="0c01", SYMLINK="numato", MODE="0666"

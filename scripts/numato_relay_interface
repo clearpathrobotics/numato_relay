@@ -10,6 +10,7 @@
 import rospy
 import serial
 from std_srvs.srv import SetBool, SetBoolResponse
+from std_msgs.msg import Bool
 import sys
 
 
@@ -18,17 +19,43 @@ class NumatoRelayInterface:
         self.port = rospy.get_param('~port', '/dev/ttyACM0')
         self.baud = rospy.get_param('~baud', 19200)
         self.serial_port = serial.Serial(self.port, self.baud, timeout=1)
+        self.SERIAL_READ_SIZE = 25
+
+        self.gpio_to_read = rospy.get_param('~gpio_to_read', [])
+        self.freq = float(rospy.get_param('~freq', 20.0))  # 20 Hz
 
         rospy.Service('set_relay_0', SetBool, self.control_relay_0)
         rospy.Service('set_relay_1', SetBool, self.control_relay_1)
+        rospy.Service('set_relay_2', SetBool, self.control_relay_2)
+        rospy.Service('set_relay_3', SetBool, self.control_relay_3)
+        rospy.Service('set_relay_4', SetBool, self.control_relay_4)
+        rospy.Service('set_relay_5', SetBool, self.control_relay_5)
+        rospy.Service('set_relay_6', SetBool, self.control_relay_6)
+        rospy.Service('set_relay_7', SetBool, self.control_relay_7)
 
+        self.pub_gpio_reads = []
+        if (not self.gpio_to_read):
+            rospy.loginfo("No GPIO to read.")
+        else:
+            for i in range(0, len(self.gpio_to_read)):
+                rospy.loginfo("Reading GPIO from " + str(self.gpio_to_read[i]))
+                self.pub_gpio_reads.append(rospy.Publisher('gpio/state/' + str(self.gpio_to_read[i]), Bool, queue_size = 1))
+
+        self.rate = rospy.Rate(self.freq)
+
+    def run(self):
         while not rospy.is_shutdown():
-            rospy.spin()
+            if (self.gpio_to_read):
+                for i in range(0, len(self.gpio_to_read)):
+                    state = Bool()
+                    state.data = self.read_gpio(self.gpio_to_read[i])
+                    self.pub_gpio_reads[i].publish(state)
+            self.rate.sleep()
 
         self.serial_port.close()
 
     def control_relay(self, req, relay):
-        if(req.data):
+        if (req.data):
             cmd = str("on")
         else:
             cmd = str("off")
@@ -38,7 +65,7 @@ class NumatoRelayInterface:
         self.serial_port.write(bytes(("relay read " + str(relay) + "\n\r").encode("utf-8")))
 
         # Response will be byte type; cast back to string.
-        response = str(self.serial_port.read(25))
+        response = str(self.serial_port.read(self.SERIAL_READ_SIZE))
         if ((response.find("on") > 0) and (req.data)):
             state = True
             response = "Turn on relay"
@@ -57,6 +84,38 @@ class NumatoRelayInterface:
     def control_relay_1(self, req):
         return self.control_relay(req, 1)
 
+    def control_relay_2(self, req):
+        return self.control_relay(req, 2)
+
+    def control_relay_3(self, req):
+        return self.control_relay(req, 3)
+
+    def control_relay_4(self, req):
+        return self.control_relay(req, 4)
+
+    def control_relay_5(self, req):
+        return self.control_relay(req, 5)
+
+    def control_relay_6(self, req):
+        return self.control_relay(req, 6)
+
+    def control_relay_7(self, req):
+        return self.control_relay(req, 7)
+
+    def read_gpio(self, num):
+        # Send "gpio read" command
+        self.serial_port.write(bytes(("gpio read " + str(num) + "\n\r").encode("utf-8")))
+
+        # Response will be byte type; cast back to string.
+        response = str(self.serial_port.read(self.SERIAL_READ_SIZE))
+
+        if (response[-7] == "1"):
+            return True
+        elif (response[-7] == "0"):
+            return False
+
+
 if __name__ == "__main__":
     rospy.init_node('numato_relay_control_server')
     nri = NumatoRelayInterface()
+    nri.run()
