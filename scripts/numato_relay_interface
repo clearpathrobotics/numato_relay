@@ -44,7 +44,8 @@ class NumatoRelayInterface:
         else:
             for i in range(0, len(self.gpio_to_read)):
                 rospy.loginfo("Reading GPIO from " + str(self.gpio_to_read[i]))
-                self.pub_gpio_reads.append(rospy.Publisher('gpio/state/' + str(self.gpio_to_read[i]), Bool, queue_size = 1))
+                self.pub_gpio_reads.append(rospy.Publisher('gpio/state/' + str(self.gpio_to_read[i]), \
+                                           Bool, queue_size = 1))
 
         self.rate = rospy.Rate(self.freq)
 
