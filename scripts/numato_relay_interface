@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 # Software License Agreement (proprietary)
 #
 # @author   Tony Baltovski <tbaltovski@clearpathrobotics.com>
@@ -13,7 +13,6 @@ from std_srvs.srv import SetBool, SetBoolResponse
 from std_msgs.msg import Bool
 import sys
 
-
 class NumatoRelayInterface:
     def __init__(self):
         self.port = rospy.get_param('~port', '/dev/ttyACM0')
@@ -24,7 +23,6 @@ class NumatoRelayInterface:
         self.gpio_to_read = rospy.get_param('~gpio_to_read', [])
         self.freq = float(rospy.get_param('~freq', 20.0))  # 20 Hz
 
-        rospy.Service('set_relay_0', SetBool, self.control_relay_0)
         rospy.Service('set_relay_1', SetBool, self.control_relay_1)
         rospy.Service('set_relay_2', SetBool, self.control_relay_2)
         rospy.Service('set_relay_3', SetBool, self.control_relay_3)
@@ -32,6 +30,12 @@ class NumatoRelayInterface:
         rospy.Service('set_relay_5', SetBool, self.control_relay_5)
         rospy.Service('set_relay_6', SetBool, self.control_relay_6)
         rospy.Service('set_relay_7', SetBool, self.control_relay_7)
+
+        self.relay_state_pubs = []
+        self.relay_states = []
+        for i in range(8):
+            self.relay_states.append(False)
+            self.relay_state_pubs.append(rospy.Publisher(f'relay_state_{i}'), Bool, queue_size=1)
 
         self.pub_gpio_reads = []
         if (not self.gpio_to_read):
@@ -50,6 +54,10 @@ class NumatoRelayInterface:
                     state = Bool()
                     state.data = self.read_gpio(self.gpio_to_read[i])
                     self.pub_gpio_reads[i].publish(state)
+
+            for i in range(len(self.relay_state_pubs)):
+                self.relay_state_pubs[i].publish(Bool(self.relay_states[i]))
+
             self.rate.sleep()
 
         self.serial_port.close()
@@ -76,6 +84,8 @@ class NumatoRelayInterface:
         else:
             state = False
             response = "Unable to control relay"
+
+        self.relay_states[relay] = state
         return SetBoolResponse(state, response)
 
     def control_relay_0(self, req):
