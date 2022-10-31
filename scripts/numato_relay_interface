@@ -76,16 +76,17 @@ class NumatoRelayInterface:
         response = str(self.serial_port.read(self.SERIAL_READ_SIZE))
         if ((response.find("on") > 0) and (req.data)):
             state = True
+            self.relay_states[relay] = req.data
             response = "Turn on relay"
 
         elif ((response.find("off") > 0) and (req.data == False)):
             state = True
+            self.relay_states[relay] = req.data
             response = "Turn off relay"
         else:
             state = False
             response = "Unable to control relay"
 
-        self.relay_states[relay] = state
         return SetBoolResponse(state, response)
 
     def control_relay_0(self, req):
