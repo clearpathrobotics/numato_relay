@@ -35,7 +35,7 @@ class NumatoRelayInterface:
         self.relay_states = []
         for i in range(8):
             self.relay_states.append(False)
-            self.relay_state_pubs.append(rospy.Publisher(f'relay_state_{i}'), Bool, queue_size=1)
+            self.relay_state_pubs.append(rospy.Publisher(f'relay_state_{i}', Bool, queue_size=1))
 
         self.pub_gpio_reads = []
         if (not self.gpio_to_read):
