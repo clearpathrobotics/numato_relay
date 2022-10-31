@@ -13,7 +13,6 @@ from std_srvs.srv import SetBool, SetBoolResponse
 from std_msgs.msg import Bool
 import sys
 
-
 class NumatoRelayInterface:
     def __init__(self):
         self.port = rospy.get_param('~port', '/dev/ttyACM0')
@@ -33,13 +32,20 @@ class NumatoRelayInterface:
         rospy.Service('set_relay_6', SetBool, self.control_relay_6)
         rospy.Service('set_relay_7', SetBool, self.control_relay_7)
 
+        self.relay_state_pubs = []
+        self.relay_states = []
+        for i in range(8):
+            self.relay_states.append(False)
+            self.relay_state_pubs.append(rospy.Publisher(f'relay_state_{i}', Bool, queue_size=1))
+
         self.pub_gpio_reads = []
         if (not self.gpio_to_read):
             rospy.loginfo("No GPIO to read.")
         else:
             for i in range(0, len(self.gpio_to_read)):
                 rospy.loginfo("Reading GPIO from " + str(self.gpio_to_read[i]))
-                self.pub_gpio_reads.append(rospy.Publisher('gpio/state/' + str(self.gpio_to_read[i]), Bool, queue_size = 1))
+                self.pub_gpio_reads.append(rospy.Publisher('gpio/state/' + str(self.gpio_to_read[i]), \
+                                           Bool, queue_size = 1))
 
         self.rate = rospy.Rate(self.freq)
 
@@ -50,6 +56,10 @@ class NumatoRelayInterface:
                     state = Bool()
                     state.data = self.read_gpio(self.gpio_to_read[i])
                     self.pub_gpio_reads[i].publish(state)
+
+            for i in range(len(self.relay_state_pubs)):
+                self.relay_state_pubs[i].publish(Bool(self.relay_states[i]))
+
             self.rate.sleep()
 
         self.serial_port.close()
@@ -68,14 +78,17 @@ class NumatoRelayInterface:
         response = str(self.serial_port.read(self.SERIAL_READ_SIZE))
         if ((response.find("on") > 0) and (req.data)):
             state = True
+            self.relay_states[relay] = req.data
             response = "Turn on relay"
 
         elif ((response.find("off") > 0) and (req.data == False)):
             state = True
+            self.relay_states[relay] = req.data
             response = "Turn off relay"
         else:
             state = False
             response = "Unable to control relay"
+
         return SetBoolResponse(state, response)
 
     def control_relay_0(self, req):
