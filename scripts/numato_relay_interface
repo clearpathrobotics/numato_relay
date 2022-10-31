@@ -23,6 +23,7 @@ class NumatoRelayInterface:
         self.gpio_to_read = rospy.get_param('~gpio_to_read', [])
         self.freq = float(rospy.get_param('~freq', 20.0))  # 20 Hz
 
+        rospy.Service('set_relay_0', SetBool, self.control_relay_0)
         rospy.Service('set_relay_1', SetBool, self.control_relay_1)
         rospy.Service('set_relay_2', SetBool, self.control_relay_2)
         rospy.Service('set_relay_3', SetBool, self.control_relay_3)
