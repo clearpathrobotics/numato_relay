@@ -1,2 +1,3 @@
 SUBSYSTEM=="tty", SUBSYSTEMS=="usb", ATTRS{idVendor}=="2a19", ATTRS{idProduct}=="0c00", SYMLINK="numato", MODE="0666"
 SUBSYSTEM=="tty", SUBSYSTEMS=="usb", ATTRS{idVendor}=="2a19", ATTRS{idProduct}=="0c01", SYMLINK="numato", MODE="0666"
+SUBSYSTEM=="tty", SUBSYSTEMS=="usb", ATTRS{idVendor}=="2a19", ATTRS{idProduct}=="0c02", SYMLINK="numato", MODE="0666"
