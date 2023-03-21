@@ -13,12 +13,16 @@ from std_srvs.srv import SetBool, SetBoolResponse
 from std_msgs.msg import Bool
 import sys
 
+from threading import Lock
+
 class NumatoRelayInterface:
     def __init__(self):
         self.port = rospy.get_param('~port', '/dev/ttyACM0')
         self.baud = rospy.get_param('~baud', 19200)
         self.serial_port = serial.Serial(self.port, self.baud, timeout=1)
         self.SERIAL_READ_SIZE = 25
+
+        self.serial_lock = Lock()
 
         self.gpio_to_read = rospy.get_param('~gpio_to_read', [])
         self.freq = float(rospy.get_param('~freq', 20.0))  # 20 Hz
@@ -35,7 +39,7 @@ class NumatoRelayInterface:
         self.relay_state_pubs = []
         self.relay_states = []
         for i in range(8):
-            self.relay_states.append(False)
+            self.relay_states.append(None)  # we don't know the state initially; some relays might already be on!
             self.relay_state_pubs.append(rospy.Publisher(f'relay_state_{i}', Bool, queue_size=1))
 
         self.pub_gpio_reads = []
@@ -50,6 +54,8 @@ class NumatoRelayInterface:
         self.rate = rospy.Rate(self.freq)
 
     def run(self):
+        self.read_initial_relay_states()
+
         while not rospy.is_shutdown():
             if (self.gpio_to_read):
                 for i in range(0, len(self.gpio_to_read)):
@@ -64,30 +70,51 @@ class NumatoRelayInterface:
 
         self.serial_port.close()
 
+    def read_initial_relay_states(self):
+        # If we start the node and a relay is already on we need to know about it
+        for i in range(len(self.relay_states)):
+            self.serial_lock.acquire()
+            self.serial_port.write(bytes(("relay read " + str(i) + "\n\r").encode("utf-8")))
+            response = str(self.serial_port.read(self.SERIAL_READ_SIZE))
+            self.serial_lock.release()
+
+            self.relay_states[i] = response.find("on") > 0
+
     def control_relay(self, req, relay):
         if (req.data):
             cmd = str("on")
         else:
             cmd = str("off")
 
-        self.serial_port.write(bytes(("relay " + cmd + " " + str(relay) + "\n\r").encode("utf-8")))
-        self.serial_port.flush()
-        self.serial_port.write(bytes(("relay read " + str(relay) + "\n\r").encode("utf-8")))
-
-        # Response will be byte type; cast back to string.
-        response = str(self.serial_port.read(self.SERIAL_READ_SIZE))
-        if ((response.find("on") > 0) and (req.data)):
+        # check if we're actually changing the relay state; if we're setting it to its
+        # current state, save some time and just return right away
+        if self.relay_states[relay] == req.data:
+            response = f"Relay is already {cmd}"
             state = True
-            self.relay_states[relay] = req.data
-            response = "Turn on relay"
-
-        elif ((response.find("off") > 0) and (req.data == False)):
-            state = True
-            self.relay_states[relay] = req.data
-            response = "Turn off relay"
         else:
-            state = False
-            response = "Unable to control relay"
+            # control_relay may be called concurrently from multiple services
+            # if this occurs, make sure only once service call owns the serial port at a time
+            self.serial_lock.acquire()
+            self.serial_port.write(bytes(("relay " + cmd + " " + str(relay) + "\n\r").encode("utf-8")))
+            self.serial_port.flush()
+            self.serial_port.write(bytes(("relay read " + str(relay) + "\n\r").encode("utf-8")))
+
+            # Response will be byte type; cast back to string.
+            response = str(self.serial_port.read(self.SERIAL_READ_SIZE))
+            self.serial_lock.release()
+
+            if ((response.find("on") > 0) and (req.data)):
+                state = True
+                self.relay_states[relay] = req.data
+                response = "Turn on relay"
+
+            elif ((response.find("off") > 0) and (req.data == False)):
+                state = True
+                self.relay_states[relay] = req.data
+                response = "Turn off relay"
+            else:
+                state = False
+                response = "Unable to control relay"
 
         return SetBoolResponse(state, response)
 
@@ -117,10 +144,12 @@ class NumatoRelayInterface:
 
     def read_gpio(self, num):
         # Send "gpio read" command
+        self.serial_lock.acquire()
         self.serial_port.write(bytes(("gpio read " + str(num) + "\n\r").encode("utf-8")))
 
         # Response will be byte type; cast back to string.
         response = str(self.serial_port.read(self.SERIAL_READ_SIZE))
+        self.serial_lock.release()
 
         if (response[-7] == "1"):
             return True
