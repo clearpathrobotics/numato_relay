@@ -19,6 +19,7 @@ class NumatoRelayInterface:
     def __init__(self):
         self.port = rospy.get_param('~port', '/dev/ttyACM0')
         self.baud = rospy.get_param('~baud', 19200)
+        self.check_on_write = rospy.get_param('~check_on_write', True)
         self.serial_port = serial.Serial(self.port, self.baud, timeout=1)
         self.SERIAL_READ_SIZE = 25
 
@@ -97,18 +98,22 @@ class NumatoRelayInterface:
             self.serial_lock.acquire()
             self.serial_port.write(bytes(("relay " + cmd + " " + str(relay) + "\n\r").encode("utf-8")))
             self.serial_port.flush()
-            self.serial_port.write(bytes(("relay read " + str(relay) + "\n\r").encode("utf-8")))
 
-            # Response will be byte type; cast back to string.
-            response = str(self.serial_port.read(self.SERIAL_READ_SIZE))
+            if self.check_on_write:
+                self.serial_port.write(bytes(("relay read " + str(relay) + "\n\r").encode("utf-8")))
+                # Response will be byte type; cast back to string.
+                response = str(self.serial_port.read(self.SERIAL_READ_SIZE))
+            else:
+                response = cmd
+
             self.serial_lock.release()
 
-            if ((response.find("on") > 0) and (req.data)):
+            if ((response.find("on") >= 0) and (req.data)):
                 state = True
                 self.relay_states[relay] = req.data
                 response = "Turn on relay"
 
-            elif ((response.find("off") > 0) and (req.data == False)):
+            elif ((response.find("off") >= 0) and (req.data == False)):
                 state = True
                 self.relay_states[relay] = req.data
                 response = "Turn off relay"
