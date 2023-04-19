@@ -15,6 +15,7 @@ import sys
 
 from threading import Lock
 
+
 class NumatoRelayInterface:
     def __init__(self):
         self.port = rospy.get_param('~port', '/dev/ttyACM0')
@@ -48,9 +49,8 @@ class NumatoRelayInterface:
             rospy.loginfo("No GPIO to read.")
         else:
             for i in range(0, len(self.gpio_to_read)):
-                rospy.loginfo("Reading GPIO from " + str(self.gpio_to_read[i]))
-                self.pub_gpio_reads.append(rospy.Publisher('gpio/state/' + str(self.gpio_to_read[i]), \
-                                           Bool, queue_size = 1))
+                rospy.loginfo(f"Reading GPIO from {self.gpio_to_read[i]}")
+                self.pub_gpio_reads.append(rospy.Publisher(f"gpio/state/{self.gpio_to_read[i]}", Bool, queue_size=1))
 
         self.rate = rospy.Rate(self.freq)
 
@@ -75,7 +75,7 @@ class NumatoRelayInterface:
         # If we start the node and a relay is already on we need to know about it
         for i in range(len(self.relay_states)):
             self.serial_lock.acquire()
-            self.serial_port.write(bytes(("relay read " + str(i) + "\n\r").encode("utf-8")))
+            self.serial_port.write(bytes(f"relay read {i} \n\r".encode("utf-8")))
             response = str(self.serial_port.read(self.SERIAL_READ_SIZE))
             self.serial_lock.release()
 
@@ -96,11 +96,11 @@ class NumatoRelayInterface:
             # control_relay may be called concurrently from multiple services
             # if this occurs, make sure only once service call owns the serial port at a time
             self.serial_lock.acquire()
-            self.serial_port.write(bytes(("relay " + cmd + " " + str(relay) + "\n\r").encode("utf-8")))
+            self.serial_port.write(bytes(f"relay {cmd} {relay}\n\r".encode("utf-8")))
             self.serial_port.flush()
 
             if self.check_on_write:
-                self.serial_port.write(bytes(("relay read " + str(relay) + "\n\r").encode("utf-8")))
+                self.serial_port.write(bytes(f"relay read {relay}\n\r".encode("utf-8")))
                 # Response will be byte type; cast back to string.
                 response = str(self.serial_port.read(self.SERIAL_READ_SIZE))
             else:
@@ -113,7 +113,7 @@ class NumatoRelayInterface:
                 self.relay_states[relay] = req.data
                 response = "Turn on relay"
 
-            elif ((response.find("off") >= 0) and (req.data == False)):
+            elif ((response.find("off") >= 0) and (not req.data)):
                 state = True
                 self.relay_states[relay] = req.data
                 response = "Turn off relay"
@@ -150,7 +150,7 @@ class NumatoRelayInterface:
     def read_gpio(self, num):
         # Send "gpio read" command
         self.serial_lock.acquire()
-        self.serial_port.write(bytes(("gpio read " + str(num) + "\n\r").encode("utf-8")))
+        self.serial_port.write(bytes(f"gpio read {num}\n\r".encode("utf-8")))
 
         # Response will be byte type; cast back to string.
         response = str(self.serial_port.read(self.SERIAL_READ_SIZE))
