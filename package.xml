@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>numato_relay_interface</name>
-  <version>0.1.0</version>
+  <version>0.1.1</version>
   <description>The numato_relay_interface package</description>
 
   <maintainer email="tbaltovski@clearpathrobotics.com">Tony tbaltovski</maintainer>

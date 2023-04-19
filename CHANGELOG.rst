@@ -2,8 +2,8 @@
 Changelog for package numato_relay_interface
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.1.1 (2023-04-19)
+------------------
 * Linter fixes
 * Contributors: Chris Iverach-Brereton
 
