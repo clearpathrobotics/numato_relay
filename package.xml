@@ -4,9 +4,9 @@
   <version>0.1.1</version>
   <description>The numato_relay_interface package</description>
 
-  <maintainer email="tbaltovski@clearpathrobotics.com">Tony tbaltovski</maintainer>
+  <maintainer email="civerachb@clearpathrobotics.com">Chris Iverach-Brereton</maintainer>
 
-  <license>Proprietary</license>
+  <license>BSD</license>
 
   <buildtool_depend>catkin</buildtool_depend>
 
