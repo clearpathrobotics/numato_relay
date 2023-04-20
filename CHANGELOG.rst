@@ -2,8 +2,8 @@
 Changelog for package numato_relay_interface
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.1.2 (2023-04-20)
+------------------
 * Fix required components in the cmake file, update the maintainer
 * Contributors: Chris Iverach-Brereton
 
