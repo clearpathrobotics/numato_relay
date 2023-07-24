@@ -38,12 +38,18 @@ class NumatoRelayInterface:
         rospy.Service('set_relay_6', SetBool, self.control_relay_6)
         rospy.Service('set_relay_7', SetBool, self.control_relay_7)
 
+        # The relay status topics are latched, since the only way to control them is via the ROS services
+        # (we assume we own the serial interface, and nobody else can use it while we do)
+        # The state is published once on startup (see read_initial_relay_states) and whenever the state changes
+        # (see control_relay)
         self.relay_state_pubs = []
         self.relay_states = []
         for i in range(8):
             self.relay_states.append(None)  # we don't know the state initially; some relays might already be on!
-            self.relay_state_pubs.append(rospy.Publisher(f'relay_state_{i}', Bool, queue_size=1))
+            self.relay_state_pubs.append(rospy.Publisher(f'relay_state_{i}', Bool, queue_size=1, latched=True))
 
+        # GPIO states are not latched since if they're being used as inputs we need to be able to read them quickly and
+        # whoever's listening may care about consecutive on/off messages which would be lost with a latched topic
         self.pub_gpio_reads = []
         if (not self.gpio_to_read):
             rospy.loginfo("No GPIO to read.")
@@ -64,9 +70,6 @@ class NumatoRelayInterface:
                     state.data = self.read_gpio(self.gpio_to_read[i])
                     self.pub_gpio_reads[i].publish(state)
 
-            for i in range(len(self.relay_state_pubs)):
-                self.relay_state_pubs[i].publish(Bool(self.relay_states[i]))
-
             self.rate.sleep()
 
         self.serial_port.close()
@@ -80,6 +83,10 @@ class NumatoRelayInterface:
             self.serial_lock.release()
 
             self.relay_states[i] = response.find("on") > 0
+
+        # the relay states are latched, so publish the initial states once we have them
+        for i in range(len(self.relay_state_pubs)):
+            self.relay_state_pubs[i].publish(Bool(self.relay_states[i]))
 
     def control_relay(self, req, relay):
         if (req.data):
@@ -120,6 +127,9 @@ class NumatoRelayInterface:
             else:
                 state = False
                 response = "Unable to control relay"
+
+            # publish the new state of the relay since it's a latched topic
+            self.relay_state_pubs[relay].publish(Bool(self.relay_states[relay]))
 
         return SetBoolResponse(state, response)
 
