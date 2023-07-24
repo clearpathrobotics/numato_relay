@@ -46,7 +46,7 @@ class NumatoRelayInterface:
         self.relay_states = []
         for i in range(8):
             self.relay_states.append(None)  # we don't know the state initially; some relays might already be on!
-            self.relay_state_pubs.append(rospy.Publisher(f'relay_state_{i}', Bool, queue_size=1, latched=True))
+            self.relay_state_pubs.append(rospy.Publisher(f'relay_state_{i}', Bool, queue_size=1, latch=True))
 
         # GPIO states are not latched since if they're being used as inputs we need to be able to read them quickly and
         # whoever's listening may care about consecutive on/off messages which would be lost with a latched topic
