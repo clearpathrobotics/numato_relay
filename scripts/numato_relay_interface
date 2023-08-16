@@ -7,11 +7,13 @@
 # Redistribution and use in source and binary forms, with or without modification, is not permitted without the
 # express permission of Clearpath Robotics.
 
+import os
 import rospy
 import serial
+import sys
+
 from std_srvs.srv import SetBool, SetBoolResponse
 from std_msgs.msg import Bool
-import sys
 
 from threading import Lock
 
@@ -21,6 +23,19 @@ class NumatoRelayInterface:
         self.port = rospy.get_param('~port', '/dev/ttyACM0')
         self.baud = rospy.get_param('~baud', 19200)
         self.check_on_write = rospy.get_param('~check_on_write', True)
+
+        if not os.path.exists(self.port):
+            rospy.logwarn(f"Serial port {self.port} does not exist. Waiting for it to appear...")
+            rate = rospy.Rate(1)
+            while not os.path.exists(self.port) and not rospy.is_shutdown():
+                rate.sleep()
+
+            if not rospy.is_shutdown():
+                rospy.loginfo(f"Serial port {self.port} showed up! Starting Numato relay interface node")
+            else:
+                rospy.loginfo("Shutting down Numato relay interface node")
+                sys.exit(0)
+
         self.serial_port = serial.Serial(self.port, self.baud, timeout=1)
         self.SERIAL_READ_SIZE = 25
 
