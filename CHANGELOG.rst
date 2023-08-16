@@ -2,8 +2,8 @@
 Changelog for package numato_relay_interface
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.1.3 (2023-08-16)
+------------------
 * Sleep if the specified serial port file doesn't exist (yet)
 * Change the relay state topics to be latched and only publish their initial states + new state on change
 * Contributors: Chris Iverach-Brereton
