@@ -1,7 +1,7 @@
 # numato_relay_interface
 
 > [!IMPORTANT]  
-> This branch is for [ROS Noetic](http://wiki.ros.org/noetic), and is not actively maintained.
+> This branch is for [ROS 2 Humble](https://docs.ros.org/en/humble/index.html).
 
 > [!NOTE]  
 > This driver has been tested with [Numato Labs](https://numato.com/) USB relay boards with 2, 4, 8 and relays.
