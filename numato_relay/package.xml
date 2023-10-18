@@ -3,7 +3,7 @@
 <package format="3">
   <name>numato_relay</name>
   <version>0.0.0</version>
-  <description>Numato relay driver</description>
+  <description>Driver for controlling Numato Labs USB relay PCBAs</description>
   <maintainer email="rfaultless@clearpathrobotics.com">Rhys Faultless</maintainer>
   <license>BSD</license>
 
