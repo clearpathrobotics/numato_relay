@@ -1,18 +1,28 @@
 # numato_relay_interface
 
+> [!IMPORTANT]  
+> This branch is for [ROS Noetic](http://wiki.ros.org/noetic), and is not actively maintained.
+
+> [!NOTE]  
+> This driver has been tested with [Numato Labs](https://numato.com/) USB relay boards with 2, 4, 8 and relays.
+
+<br />
 
 ## Installation
 
-To manually install the udev rule:
-```
-sudo cp debian/udev /etc/udev/rules.d/41-numato.rules
-sudo udevadm control --reload-rules
-sudo udevadm trigger
-```
+1.  To manually install the udev rule:
+    ```
+    sudo cp debian/udev /etc/udev/rules.d/41-numato.rules
+    sudo udevadm control --reload-rules
+    sudo udevadm trigger
+    ```
+2.  Clone this repository to your ROS workspace's `src` folder, and build the workspace.
+
+<br />
 
 ## Usage
 
-## Running the Driver
+### Running the Driver
 
 ```
 roslaunch numato_relay_interface numato_relay_interface.launch
@@ -24,17 +34,19 @@ OR
 rosrun numato_relay_interface numato_relay_interface
 ```
 
-### turning on relay 0:
+#### turning on relay 0:
 
 ```
 rosservice call set_relay_0 "data: true"
 ```
 
-### turning off relay 0:
+#### turning off relay 0:
 
 ```
 rosservice call set_relay_0 "data: false"
 ```
+
+<br />
 
 ## Topics and Services
 
@@ -81,6 +93,8 @@ something semantically meaningful for your application.  For example:
   <remap from="relay_state_6" to="/lights/rear_on" />
 </node>
 ```
+
+<br />
 
 ## Parameters
 
