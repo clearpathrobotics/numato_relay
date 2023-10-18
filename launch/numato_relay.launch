@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <!--
 Software License Agreement (proprietary)
-\file      numato_relay_interface.launch
+\file      numato_relay.launch
 \authors   Rhys Faultless <rfaultless@clearpathrobotics.com>
 \copyright Copyright (c) 2021, Clearpath Robotics, Inc., All rights reserved.
 Redistribution and use in source and binary forms, with or without modification, is not permitted without the
@@ -11,7 +11,7 @@ express permission of Clearpath Robotics.
   <arg name="port" default="$(optenv NUMATO_PORT /dev/numato)" />
 	<arg name="baud" default="$(optenv NUMATO_BAUD 19200)" />
 
-  <node pkg="numato_relay_interface" type="numato_relay_interface" name="numato_relay_control_server">
+  <node pkg="numato_relay" type="numato_relay" name="numato_relay_control_server">
     <param name="port" value="$(arg port)" />
     <param name="baud" value="$(arg baud)" />
     <!-- <rosparam param="gpio_to_read">[0, 1, 2]</rosparam> -->

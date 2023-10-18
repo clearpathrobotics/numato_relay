@@ -1,4 +1,4 @@
-# numato_relay_interface
+# numato_relay
 
 > [!IMPORTANT]  
 > This branch is for [ROS Noetic](http://wiki.ros.org/noetic), and is not actively maintained.
@@ -20,13 +20,13 @@ sudo udevadm trigger
 ## Running the Driver
 
 ```
-roslaunch numato_relay_interface numato_relay_interface.launch
+roslaunch numato_relay numato_relay.launch
 ```
 
 OR
 
 ```
-rosrun numato_relay_interface numato_relay_interface
+rosrun numato_relay numato_relay
 ```
 
 ### turning on relay 0:
@@ -54,7 +54,7 @@ For easy of use, it is recommended to use the `remap` feature of `roslaunch` to 
 something semantically meaningful for your application.  For example:
 
 ```
-<node pkg="numato_relay_interface" type="numato_relay_interface" name="numato_relay_control_server">
+<node pkg="numato_relay" type="numato_relay" name="numato_relay_control_server">
   <param name="port" value="$(arg port)" />
   <param name="baud" value="$(arg baud)" />
   <param name="check_on_write" value="false" />
