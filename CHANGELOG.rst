@@ -2,8 +2,8 @@
 Changelog for package numato_relay
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.2.0 (2023-10-18)
+------------------
 * Rename the package from `numato_relay_interface` to `numato_relay`
 * Add a notice about supported devices & ROS version
 * Contributors: Chris Iverach-Brereton
