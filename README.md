@@ -1,4 +1,4 @@
-# numato_relay_interface
+# numato_relay
 
 > [!IMPORTANT]  
 > This branch is for [ROS 2 Humble](https://docs.ros.org/en/humble/index.html).
