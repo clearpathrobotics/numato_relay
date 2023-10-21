@@ -29,7 +29,7 @@
                 |   └── ...
                 └── README.md
     ```
-    
+
 3.  Install the udev rule:
     ```
     sudo cp ~/ros2_ws/src/numato_relay/debian/udev /etc/udev/rules.d/41-numato.rules
@@ -118,6 +118,14 @@ The topic names are:
 <br />
 
 ## Hardware details
--   /dev/ttyACM0
-    -   `sudo chmod 777 /dev/ttyACM0`
--   19200 baud
+-   Use a Numato Labs USB relay board:
+    | Numato Labs item                                                  | Description          | Cable Required                 |
+    | :---------------------------------------------------------------- | :------------------- | :----------------------------- |
+    | [RL20001](gttps://numato.com/product/2-channel-usb-relay-module/) | 2 relay channel PCBA | USB 2.0, Type-A to Type-B-mini |
+    | [RL40001](https://numato.com/product/4-channel-usb-relay-module/) | 4 relay channel PCBA | USB 2.0, Type-A to Type-B-mini |
+    | [RL80001](https://numato.com/product/8-channel-usb-relay-module/) | 8 relay channel PCBA | USB 2.0, Type-A to Type-B      |
+
+-   Computer with Ubuntu and ROS 2.
+    This has been tested with Ubuntu 22.04 Jammy Jellyfish, and ROS 2 Humble.
+-   The Numato PCBA connects as device `/dev/ttyACM0`.
+-   The Numato PCBA communicates at 19200 baud.
