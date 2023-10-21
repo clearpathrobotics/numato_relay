@@ -10,10 +10,26 @@
 
 ## Installation
 
-1.  Create a workspace and src directory, `~/ros2_ws/src/`
-2.  Copy the 2 folders and contents of this repository to the src directory:
-    -   `~/ros2_ws/src/numato_relay/`
-    -   `~/ros2_ws/src/numato_relay_interfaces/`
+1.  Create a workspace and src directory, `~/ros2_ws/src/`.
+2.  Clone this git repository to the directory `~/ros2_ws/src/`.
+    You now have a directory structure of:
+
+    ```bash
+    ~/ros2_ws/
+        └── src/
+            └── numato_relay/
+                ├── debian/
+                |   ├── ...
+                |   └── ...
+                ├── numato_relay/
+                |   ├── ...
+                |   └── ...
+                ├── numato_relay_interfaces/
+                |   ├── ...
+                |   └── ...
+                └── README.md
+    ```
+    
 3.  Install the udev rule:
     ```
     sudo cp ~/ros2_ws/src/numato_relay/debian/udev /etc/udev/rules.d/41-numato.rules
