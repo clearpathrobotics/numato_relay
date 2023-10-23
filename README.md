@@ -121,7 +121,7 @@ The topic names are:
 -   Use a Numato Labs USB relay board:
     | Numato Labs item                                                  | Description          | Cable Required                 |
     | :---------------------------------------------------------------- | :------------------- | :----------------------------- |
-    | [RL20001](gttps://numato.com/product/2-channel-usb-relay-module/) | 2 relay channel PCBA | USB 2.0, Type-A to Type-B-mini |
+    | [RL20001](https://numato.com/product/2-channel-usb-relay-module/) | 2 relay channel PCBA | USB 2.0, Type-A to Type-B-mini |
     | [RL40001](https://numato.com/product/4-channel-usb-relay-module/) | 4 relay channel PCBA | USB 2.0, Type-A to Type-B-mini |
     | [RL80001](https://numato.com/product/8-channel-usb-relay-module/) | 8 relay channel PCBA | USB 2.0, Type-A to Type-B      |
 
