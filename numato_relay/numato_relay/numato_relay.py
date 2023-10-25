@@ -38,7 +38,7 @@ from std_msgs.msg import Bool
 class NumatoRelay(Node):
     def __init__(self):
         super().__init__('NumatoRelay')
-        self.service_set_relay = self.create_service(SetRelay, '/set_relay', self.set_relay)
+        self.service_set_relay = self.create_service(SetRelay, 'set_relay', self.set_relay)
         relay_timer_period = 1.0  # seconds
         gpio_timer_period = 3.0  # seconds
         self.relay_timer = self.create_timer(relay_timer_period, self.relay_timer_callback)
@@ -140,21 +140,21 @@ class NumatoRelay(Node):
     def update_relay_publishers(self):
         number_of_relays = self.get_number_of_relays()
         if ( number_of_relays > 0 ):
-            self.relay_publisher_0 = self.create_publisher(Bool, '/numato_relay_state_0', 10)
+            self.relay_publisher_0 = self.create_publisher(Bool, 'numato_relay_state_0', 10)
         if ( number_of_relays > 1 ):
-            self.relay_publisher_1 = self.create_publisher(Bool, '/numato_relay_state_1', 10)
+            self.relay_publisher_1 = self.create_publisher(Bool, 'numato_relay_state_1', 10)
         if ( number_of_relays > 2 ):
-            self.relay_publisher_2 = self.create_publisher(Bool, '/numato_relay_state_2', 10)
+            self.relay_publisher_2 = self.create_publisher(Bool, 'numato_relay_state_2', 10)
         if ( number_of_relays > 3 ):
-            self.relay_publisher_3 = self.create_publisher(Bool, '/numato_relay_state_3', 10)
+            self.relay_publisher_3 = self.create_publisher(Bool, 'numato_relay_state_3', 10)
         if ( number_of_relays > 4 ):
-            self.relay_publisher_4 = self.create_publisher(Bool, '/numato_relay_state_4', 10)
+            self.relay_publisher_4 = self.create_publisher(Bool, 'numato_relay_state_4', 10)
         if ( number_of_relays > 5 ):
-            self.relay_publisher_5 = self.create_publisher(Bool, '/numato_relay_state_5', 10)
+            self.relay_publisher_5 = self.create_publisher(Bool, 'numato_relay_state_5', 10)
         if ( number_of_relays > 6 ):
-            self.relay_publisher_6 = self.create_publisher(Bool, '/numato_relay_state_6', 10)
+            self.relay_publisher_6 = self.create_publisher(Bool, 'numato_relay_state_6', 10)
         if ( number_of_relays > 7 ):
-            self.relay_publisher_7 = self.create_publisher(Bool, '/numato_relay_state_7', 10)
+            self.relay_publisher_7 = self.create_publisher(Bool, 'numato_relay_state_7', 10)
 
 
     def read_gpio(self):
@@ -210,21 +210,21 @@ class NumatoRelay(Node):
     def update_gpio_publishers(self):
         number_of_gpio = self.get_number_of_gpio()
         if ( number_of_gpio > 0 ):
-            self.gpio_publisher_0 = self.create_publisher(Bool, '/numato_gpio_state_0', 10)
+            self.gpio_publisher_0 = self.create_publisher(Bool, 'numato_gpio_state_0', 10)
         if ( number_of_gpio > 1 ):
-            self.gpio_publisher_1 = self.create_publisher(Bool, '/numato_gpio_state_1', 10)
+            self.gpio_publisher_1 = self.create_publisher(Bool, 'numato_gpio_state_1', 10)
         if ( number_of_gpio > 2 ):
-            self.gpio_publisher_2 = self.create_publisher(Bool, '/numato_gpio_state_2', 10)
+            self.gpio_publisher_2 = self.create_publisher(Bool, 'numato_gpio_state_2', 10)
         if ( number_of_gpio > 3 ):
-            self.gpio_publisher_3 = self.create_publisher(Bool, '/numato_gpio_state_3', 10)
+            self.gpio_publisher_3 = self.create_publisher(Bool, 'numato_gpio_state_3', 10)
         if ( number_of_gpio > 4 ):
-            self.gpio_publisher_4 = self.create_publisher(Bool, '/numato_gpio_state_4', 10)
+            self.gpio_publisher_4 = self.create_publisher(Bool, 'numato_gpio_state_4', 10)
         if ( number_of_gpio > 5 ):
-            self.gpio_publisher_5 = self.create_publisher(Bool, '/numato_gpio_state_5', 10)
+            self.gpio_publisher_5 = self.create_publisher(Bool, 'numato_gpio_state_5', 10)
         if ( number_of_gpio > 6 ):
-            self.gpio_publisher_6 = self.create_publisher(Bool, '/numato_gpio_state_6', 10)
+            self.gpio_publisher_6 = self.create_publisher(Bool, 'numato_gpio_state_6', 10)
         if ( number_of_gpio > 7 ):
-            self.gpio_publisher_7 = self.create_publisher(Bool, '/numato_gpio_state_7', 10)
+            self.gpio_publisher_7 = self.create_publisher(Bool, 'numato_gpio_state_7', 10)
 
 
     def relay_timer_callback(self):
