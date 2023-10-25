@@ -1,94 +1,135 @@
-# numato_relay_interface
+# numato_relay
 
+> [!IMPORTANT]  
+> This branch is for [ROS 2 Humble](https://docs.ros.org/en/humble/index.html).
+
+> [!NOTE]  
+> This driver has been tested with [Numato Labs](https://numato.com/) USB relay boards with 2, 4, 8 and relays.
+
+<br />
 
 ## Installation
 
-To manually install the udev rule:
-```
-sudo cp debian/udev /etc/udev/rules.d/41-numato.rules
-sudo udevadm control --reload-rules
-sudo udevadm trigger
-```
+1.  Create a workspace and src directory, `~/ros2_ws/src/`.
+2.  Clone this git repository to the directory `~/ros2_ws/src/`.
+    You now have a directory structure of:
+
+    ```bash
+    ~/ros2_ws/
+        └── src/
+            └── numato_relay/
+                ├── debian/
+                |   ├── ...
+                |   └── ...
+                ├── numato_relay/
+                |   ├── ...
+                |   └── ...
+                ├── numato_relay_interfaces/
+                |   ├── ...
+                |   └── ...
+                └── README.md
+    ```
+
+3.  Install the udev rule:
+    ```
+    sudo cp ~/ros2_ws/src/numato_relay/debian/udev /etc/udev/rules.d/41-numato.rules
+    sudo udevadm control --reload-rules
+    sudo udevadm trigger
+    ```
+4.  Build the workspace:
+    ```
+    cd ~/ros2_ws
+    colcon build
+    ```
+
+5.  Source the workspace:
+    ```
+    source ~/ros2_ws/install/setup.bash
+    ```
+
+<br />
 
 ## Usage
 
-## Running the Driver
+### Running the Driver
 
-```
-roslaunch numato_relay_interface numato_relay_interface.launch
-```
+1.  Open a new terminal.
+2.  Source the workspace:
+    ```
+    source ~/ros2_ws/install/setup.bash
+    ```
+3.  Start the node with either:
 
-OR
+    ```
+    ros2 launch numato_relay numato_relay_launch.py
+    ```
 
-```
-rosrun numato_relay_interface numato_relay_interface
-```
+    or
 
-### turning on relay 0:
+    ```
+    ros2 run numato_relay service
+    ```
 
-```
-rosservice call set_relay_0 "data: true"
-```
+    > [!NOTE]  
+    > `ros2 run` may have issues if the Numato is connected as a device other than the default `/dev/ttyACM0`.
+    > The launch file includes line to change this parameter.
 
-### turning off relay 0:
+<br />
 
-```
-rosservice call set_relay_0 "data: false"
-```
+### Controlling a relay
 
-## Topics and Services
+After starting the package per the steps in Running the driver:
+1.  Open a new terminal.
+2.  Source the workspace:
+    ```
+    source ~/ros2_ws/install/setup.bash
+    ```
+3.  Calling the Service
+    ```
+    ros2 service call set_relay numato_relay_interfaces/srv/SetRelay "{relay_channel: 3, relay_state: False}"
+    ```
+    
+    -   Changing the integer beside `relay_channel:` to match the relay that you want to control.
+    -   Changing the boolean beside `relay_state:` to:
+        -  True for closing the relay (_powered_)
+        -  False for opening the relay (_unpowered_)
 
-The node provides 8 numbered topics and 8 numbered services for querying and controlling the relays.  Note that
-not all Numato relay boards have 8 relays on them, so some topics/services may not do anything.
 
-* `set_relay_N` (`std_srvs/SetBool`) The service used to control the state of relay N, where N is a number from 0 to 7
-* `relay_state_N` (`std_msgs/Bool`) The topic that publishes the current state of relay N, where N is a number from 0
-  to 7.
+<br />
 
-For easy of use, it is recommended to use the `remap` feature of `roslaunch` to change the topics and services to
-something semantically meaningful for your application.  For example:
+### Topics and Services
 
-```
-<node pkg="numato_relay_interface" type="numato_relay_interface" name="numato_relay_control_server">
-  <param name="port" value="$(arg port)" />
-  <param name="baud" value="$(arg baud)" />
-  <param name="check_on_write" value="false" />
+A topic is created for each available relay.
+`numato_relay.py` structures 8 publishers, but only publishes the ones that are supported on the connected Numato PCBA.
+So, with a 4 channel PCBA, only topics 0 - 3 will be published.
 
-  <!--
-    Pins 0-3 are used for the stack light
-  -->
-  <remap from="set_relay_0" to="/lights/set_strobe_on" />
-  <remap from="relay_state_0" to="/lights/strobe_on" />
-  <remap from="set_relay_1" to="/lights/set_stack_red" />
-  <remap from="relay_state_1" to="/lights/stack_red_on" />
-  <remap from="set_relay_2" to="/lights/set_stack_grn" />
-  <remap from="relay_state_2" to="/lights/stack_grn_on" />
-  <remap from="set_relay_3" to="/lights/set_stack_blu" />
-  <remap from="relay_state_3" to="/lights/stack_blu_on" />
+Each topic publishes a boolean:
+-   True = on = relay closed = relay powered
+-   False = off = relay open = relay not powered
 
-  <!--
-    Pin 4 controls the backup alarm
-  -->
-  <remap from="set_relay_4" to="/backup_alarm/set_sound_on" />
-  <remap from="relay_state_4" to="/backup_alarm/sounding" />
+<br />
 
-  <!--
-    Pins 5 and 6 control the driving lights
-  -->
-  <remap from="set_relay_5" to="/lights/set_front_on" />
-  <remap from="relay_state_5" to="/light/front_on" />
-  <remap from="set_relay_6" to="/lights/set_rear_on" />
-  <remap from="relay_state_6" to="/lights/rear_on" />
-</node>
-```
+The topic names are:
+-   `/numato_relay_state_0`
+-   `/numato_relay_state_1`
+-   `/numato_relay_state_2`
+-   `/numato_relay_state_3`
+-   `/numato_relay_state_4`
+-   `/numato_relay_state_5`
+-   `/numato_relay_state_6`
+-   `/numato_relay_state_7`
 
-## Parameters
+<br />
 
-The node checks the following `rosparam` values:
-* `~port` (default: `/dev/ttyACM0`) The serial device to open.
-* `~baud` (default: `19200`) The baud rate for the serial connection
-* `~check_on_write` (default: `true`) If true, after writing a relay state the state is read back to confirm it was
-  set correctly.  Disabling this will dramatically speed up response times, but risks leaving errors uncaught.
-* `~gpio_to_read` (default: `[]`) GPIO pins to read from the board
-* `~freq` (default: `20.0`) The frequency in Hz that the GPIO pins are read (if configured) and the current relay states
-  are published on their corresponding topics
+## Hardware details
+-   Use a Numato Labs USB relay board:
+    | Numato Labs item                                                  | Description          | Cable Required                 |
+    | :---------------------------------------------------------------- | :------------------- | :----------------------------- |
+    | [RL20001](https://numato.com/product/2-channel-usb-relay-module/) | 2 relay channel PCBA | USB 2.0, Type-A to Type-B-mini |
+    | [RL40001](https://numato.com/product/4-channel-usb-relay-module/) | 4 relay channel PCBA | USB 2.0, Type-A to Type-B-mini |
+    | [RL80001](https://numato.com/product/8-channel-usb-relay-module/) | 8 relay channel PCBA | USB 2.0, Type-A to Type-B      |
+
+-   Computer with Ubuntu and ROS 2.
+    This has been tested with Ubuntu 22.04 Jammy Jellyfish, and ROS 2 Humble.
+-   The Numato PCBA connects as device `/dev/ttyACM0`.
+-   The Numato PCBA communicates at 19200 baud.
