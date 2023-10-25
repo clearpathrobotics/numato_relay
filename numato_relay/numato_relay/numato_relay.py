@@ -43,8 +43,10 @@ class NumatoRelay(Node):
         gpio_timer_period = 3.0  # seconds
         self.relay_timer = self.create_timer(relay_timer_period, self.relay_timer_callback)
         #self.gpio_timer = self.create_timer(gpio_timer_period, self.gpio_timer_callback)
-        self.port = '/dev/ttyACM0'
-        self.baud = 19200
+        self.declare_parameter('port', '/dev/ttyACM0')
+        self.port = self.get_parameter('port').get_parameter_value().string_value
+        self.declare_parameter('baud', 19200)
+        self.baud = self.get_parameter('baud').get_parameter_value().integer_value
         self.serial_port = serial.Serial(self.port, self.baud, timeout=1)
         self.SERIAL_READ_SIZE = 25
         self.serial_lock = Lock()

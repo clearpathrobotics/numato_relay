@@ -3,8 +3,14 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
   numato_relay_node = Node(
-      package='numato_relay',
-      executable='service'
+    package='numato_relay',
+    executable='service',
+    parameters=[
+      {
+        'port': '/dev/ttyACM0',
+        'baud': 19200
+      }
+    ]
   )
 
   ld = LaunchDescription()
