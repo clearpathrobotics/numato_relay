@@ -82,7 +82,7 @@ After starting the package per the steps in Running the driver:
     ```
 3.  Calling the Service
     ```
-    ros2 service call /set_relay numato_relay_interfaces/srv/SetRelay "{relay_channel: 3, relay_state: False}"
+    ros2 service call set_relay numato_relay_interfaces/srv/SetRelay "{relay_channel: 3, relay_state: False}"
     ```
     
     -   Changing the integer beside `relay_channel:` to match the relay that you want to control.
