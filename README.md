@@ -70,6 +70,10 @@
     ros2 run numato_relay service
     ```
 
+    > [!NOTE]  
+    > `ros2 run` may have issues if the Numato is connected as a device other than the default `/dev/ttyACM0`.
+    > The launch file includes line to change this parameter.
+
 <br />
 
 ### Controlling a relay
