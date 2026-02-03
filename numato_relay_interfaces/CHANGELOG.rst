@@ -2,8 +2,8 @@
 Changelog for package numato_relay_interfaces
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Forthcoming
------------
+0.3.0 (2026-02-03)
+------------------
 * Humble (`#3 <https://github.com/clearpathrobotics/numato_relay/issues/3>`_)
   * Removed Noetic files, replaced with Humble files
   * Changed banner note from Noetic to Humble.
