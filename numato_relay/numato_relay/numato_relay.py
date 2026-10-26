@@ -28,316 +28,199 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import serial
+import time
 from threading import Lock
-from numato_relay_interfaces.srv import SetRelay
+from numato_relay_interfaces.msg import GpioStates, RelayStates
+from numato_relay_interfaces.srv import GetRelay, SetRelay, ToggleRelay
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Bool
 
 
 class NumatoRelay(Node):
     def __init__(self):
-        super().__init__('NumatoRelay')
-        self.service_set_relay = self.create_service(SetRelay, 'set_relay', self.set_relay)
-        relay_timer_period = 1.0  # seconds
-        gpio_timer_period = 3.0  # seconds
-        self.relay_timer = self.create_timer(relay_timer_period, self.relay_timer_callback)
-        #self.gpio_timer = self.create_timer(gpio_timer_period, self.gpio_timer_callback)
+        super().__init__('numato_relay')
+
         self.declare_parameter('port', '/dev/ttyACM0')
-        self.port = self.get_parameter('port').get_parameter_value().string_value
         self.declare_parameter('baud', 19200)
+        self.declare_parameter('toggle_duration', 2.0)  # seconds held in the opposite state
+        self.declare_parameter('relay_timer_period', 1.0)  # seconds
+        self.declare_parameter('gpio_timer_period', 3.0)  # seconds
+
+        self.port = self.get_parameter('port').get_parameter_value().string_value
         self.baud = self.get_parameter('baud').get_parameter_value().integer_value
+        self.toggle_duration = self.get_parameter('toggle_duration').get_parameter_value().double_value
+        self.relay_timer_period = self.get_parameter(
+            'relay_timer_period').get_parameter_value().double_value
+        self.gpio_timer_period = self.get_parameter(
+            'gpio_timer_period').get_parameter_value().double_value
+
         self.serial_port = serial.Serial(self.port, self.baud, timeout=1)
         self.SERIAL_READ_SIZE = 25
         self.serial_lock = Lock()
 
         self.relay_state_array = []
-        self.relay_publisher_0 = None
-        self.relay_publisher_1 = None
-        self.relay_publisher_2 = None
-        self.relay_publisher_3 = None
-        self.relay_publisher_4 = None
-        self.relay_publisher_5 = None
-        self.relay_publisher_6 = None
-        self.relay_publisher_7 = None
-
         self.gpio_state_array = []
-        self.gpio_publisher_0 = None
-        self.gpio_publisher_1 = None
-        self.gpio_publisher_2 = None
-        self.gpio_publisher_3 = None
-        self.gpio_publisher_4 = None
-        self.gpio_publisher_5 = None
-        self.gpio_publisher_6 = None
-        self.gpio_publisher_7 = None
-        
+
+        self.relay_publisher = self.create_publisher(RelayStates, '~/relay_states', 10)
+        self.gpio_publisher = self.create_publisher(GpioStates, '~/gpio_states', 10)
+        self.service_set_relay = self.create_service(SetRelay, '~/set_relay', self.set_relay)
+        self.service_get_relay = self.create_service(GetRelay, '~/get_relay', self.get_relay)
+        self.service_toggle_relay = self.create_service(
+            ToggleRelay, '~/toggle_relay', self.toggle_relay)
+        self.relay_timer = self.create_timer(self.relay_timer_period, self.relay_timer_callback)
+        self.gpio_timer = self.create_timer(self.gpio_timer_period, self.gpio_timer_callback)
+
+    def relay_error_response(self, response, message):
+        response.success = False
+        response.relay_state = False
+        response.message = message
+        return response
+
+
+    def validate_relay_channel(self, channel, response, operation):
+        if 0 <= channel < len(self.relay_state_array):
+            return True
+        message = 'The requested relay_channel is larger than what this Relay PCBA supports'
+        self.relay_error_response(response, message)
+        self.get_logger().warning('%s: relay_channel %d: %s' % (operation, channel, message))
+        return False
+
 
     def set_relay(self, request, response):
-        response.relay_response_string = ' '
-        response.relay_response_bool = False
-        if (type(request.relay_state) is bool):     
-            if (type(request.relay_channel) is int):
-                if (not (request.relay_channel < 0) ):
-                    if ( not(request.relay_channel > (self.get_number_of_relays()-1) ) ):
-                        if (not (self.get_relay_state(request.relay_channel) == request.relay_state) ): # Check if the requested relay_channel is already set to the requested relay_state
-                            if (request.relay_state):
-                                relay_state = 'on' # 'on' or 'off' of whether the relay should be Closed or Open ( on = True = Closed = relay powered )
-                                response.relay_response_bool = True
-                                response.relay_response_string = 'Relay has been turned on.'
-                            else:
-                                relay_state = 'off'
-                                response.relay_response_bool = False
-                                response.relay_response_string = 'Relay has been turned off.'
-                            self.change_relay_state(request.relay_channel, request.relay_state)
-                            self.serial_lock.acquire()
-                            self.serial_port.write(f"relay {relay_state} {request.relay_channel}\n\r".encode("utf-8"))
-                            self.serial_port.flush()
-                            self.serial_lock.release()
-                        else:
-                            response.relay_response_string = 'Relay is already set to ' + str(request.relay_state)
-                    else:
-                        response.relay_response_string = 'The requested relay_channel is larger than what this Relay PCBA supports'
-                else:
-                    response.relay_response_string = 'The requested relay_channel needs to be a positive Integer'
-            else:
-                response.relay_response_string = 'The requested relay_channel needs to be an Integer'
+        channel = request.relay_channel
+        desired = request.relay_state
+        if not self.validate_relay_channel(channel, response, 'set_relay'):
+            return response
+        if self.relay_state_array[channel] == desired:
+            response.message = 'Relay is already set to ' + str(desired)
         else:
-            response.relay_response_string = 'The requested relay_state needs to be an Bool'
+            try:
+                self.write_relay(channel, desired)
+            except OSError as error:
+                message = 'Serial communication failed: %s' % error
+                self.get_logger().error('set_relay: relay_channel %d: %s' % (channel, message))
+                return self.relay_error_response(response, message)
+            response.message = 'Relay has been turned %s.' % ('on' if desired else 'off')
+        response.success = True
+        response.relay_state = self.relay_state_array[channel]
         return response
+
+
+    def get_relay(self, request, response):
+        if not self.validate_relay_channel(request.relay_channel, response, 'get_relay'):
+            return response
+        response.relay_state = self.relay_state_array[request.relay_channel]
+        response.success = True
+        response.message = 'Returning driver-tracked relay state.'
+        return response
+
+
+    def toggle_relay(self, request, response):
+        channel = request.relay_channel
+        desired = request.relay_state
+        if not self.validate_relay_channel(channel, response, 'toggle_relay'):
+            return response
+        try:
+            if self.relay_state_array[channel] == desired:
+                self.write_relay(channel, not desired)
+                # Blocks this node's executor (state topics pause) for the duration.
+                time.sleep(max(self.toggle_duration, 0.0))
+                self.write_relay(channel, desired)
+                response.message = 'Relay was already %s; toggled to %s for %.2f s and back.' % (
+                    desired, not desired, self.toggle_duration)
+            else:
+                self.write_relay(channel, desired)
+                response.message = 'Relay was %s; set to %s.' % (not desired, desired)
+        except OSError as error:
+            message = 'Serial communication failed: %s' % error
+            self.get_logger().error('toggle_relay: relay_channel %d: %s' % (channel, message))
+            return self.relay_error_response(response, message)
+        response.success = True
+        response.relay_state = self.relay_state_array[channel]
+        return response
+
+
+    def write_relay(self, channel, state):
+        with self.serial_lock:
+            self.serial_port.write(
+                f"relay {'on' if state else 'off'} {channel}\n\r".encode("utf-8"))
+            self.serial_port.flush()
+            self.relay_state_array[channel] = state
+
+
+    def serial_query(self, command):
+        with self.serial_lock:
+            self.serial_port.write(command.encode("utf-8"))
+            response = self.serial_port.read(self.SERIAL_READ_SIZE)
+            self.serial_port.flush()
+        return str(response)
 
 
     def read_relay(self):
         index_count = 0
         while True:
-            self.serial_lock.acquire()
-            self.serial_port.write(f"relay read {index_count} \n\r".encode("utf-8"))
-            response = str(self.serial_port.read(self.SERIAL_READ_SIZE))
-            self.serial_port.flush()
-            self.serial_lock.release()
+            response = self.serial_query(f"relay read {index_count} \n\r")
             if 'on' in response:
-                self.set_relay_state(index_count, True)
+                self.relay_state_array.insert(index_count, True)
             elif 'off' in response:
-                self.set_relay_state(index_count, False)
+                self.relay_state_array.insert(index_count, False)
             else:
                 break
             index_count += 1
 
 
-    def change_relay_state(self, index, content):
-        self.relay_state_array[index] = content
-
-
-    def set_relay_state(self, index, content):
-        self.relay_state_array.insert(index, content)
-
-
-    def get_relay_state(self, index):
-        return self.relay_state_array[index]
-
-
-    def get_number_of_relays(self):
-        return len(self.relay_state_array)
-    
-
-    def update_relay_publishers(self):
-        number_of_relays = self.get_number_of_relays()
-        if ( number_of_relays > 0 ):
-            self.relay_publisher_0 = self.create_publisher(Bool, 'numato_relay_state_0', 10)
-        if ( number_of_relays > 1 ):
-            self.relay_publisher_1 = self.create_publisher(Bool, 'numato_relay_state_1', 10)
-        if ( number_of_relays > 2 ):
-            self.relay_publisher_2 = self.create_publisher(Bool, 'numato_relay_state_2', 10)
-        if ( number_of_relays > 3 ):
-            self.relay_publisher_3 = self.create_publisher(Bool, 'numato_relay_state_3', 10)
-        if ( number_of_relays > 4 ):
-            self.relay_publisher_4 = self.create_publisher(Bool, 'numato_relay_state_4', 10)
-        if ( number_of_relays > 5 ):
-            self.relay_publisher_5 = self.create_publisher(Bool, 'numato_relay_state_5', 10)
-        if ( number_of_relays > 6 ):
-            self.relay_publisher_6 = self.create_publisher(Bool, 'numato_relay_state_6', 10)
-        if ( number_of_relays > 7 ):
-            self.relay_publisher_7 = self.create_publisher(Bool, 'numato_relay_state_7', 10)
+    def read_gpio_channel(self, channel):
+        """Return a channel's state, or None when no GPIO value is recognized."""
+        response = self.serial_query(f"gpio read {channel} \n\r")
+        response = response.lstrip(response[0:13])
+        if '1' in response:
+            return True
+        if '0' in response:
+            return False
+        self.get_logger().debug(
+            'No GPIO state recognized for channel %d: %r' % (channel, response))
+        return None
 
 
     def read_gpio(self):
         index_count = 0
         while True:
-            self.serial_lock.acquire()
-            self.serial_port.write(f"gpio read {index_count} \n\r".encode("utf-8"))
-            response = str(self.serial_port.read(self.SERIAL_READ_SIZE))
-            self.serial_port.flush()
-            self.serial_lock.release()
-            response = response.lstrip(response[0:13])
-            if '1' in response:
-                self.set_gpio_state(index_count, True)
-            elif '0' in response:
-                self.set_gpio_state(index_count, False)
-            else:
+            state = self.read_gpio_channel(index_count)
+            if state is None:
                 break
+            self.gpio_state_array.insert(index_count, state)
             index_count += 1
 
 
     def update_gpio(self):
-        for index_count in range(self.get_number_of_gpio()):
-            self.serial_lock.acquire()
-            self.serial_port.write(f"gpio read {index_count} \n\r".encode("utf-8"))
-            response = str(self.serial_port.read(self.SERIAL_READ_SIZE))
-            self.serial_port.flush()
-            self.serial_lock.release()
-            response = response.lstrip(response[0:13])
-            if '1' in response:
-                self.set_gpio_state(index_count, True)
-            elif '0' in response:
-                self.set_gpio_state(index_count, False)
-            else:
+        for index_count in range(len(self.gpio_state_array)):
+            state = self.read_gpio_channel(index_count)
+            if state is None:
                 break
-
-
-    def change_gpio_state(self, index, content):
-        self.gpio_state_array[index] = content
-
-
-    def set_gpio_state(self, index, content):
-        self.gpio_state_array.insert(index, content)
-
-
-    def get_gpio_state(self, index):
-        return self.gpio_state_array[index]
-
-
-    def get_number_of_gpio(self):
-        return len(self.gpio_state_array)
-
-
-    def update_gpio_publishers(self):
-        number_of_gpio = self.get_number_of_gpio()
-        if ( number_of_gpio > 0 ):
-            self.gpio_publisher_0 = self.create_publisher(Bool, 'numato_gpio_state_0', 10)
-        if ( number_of_gpio > 1 ):
-            self.gpio_publisher_1 = self.create_publisher(Bool, 'numato_gpio_state_1', 10)
-        if ( number_of_gpio > 2 ):
-            self.gpio_publisher_2 = self.create_publisher(Bool, 'numato_gpio_state_2', 10)
-        if ( number_of_gpio > 3 ):
-            self.gpio_publisher_3 = self.create_publisher(Bool, 'numato_gpio_state_3', 10)
-        if ( number_of_gpio > 4 ):
-            self.gpio_publisher_4 = self.create_publisher(Bool, 'numato_gpio_state_4', 10)
-        if ( number_of_gpio > 5 ):
-            self.gpio_publisher_5 = self.create_publisher(Bool, 'numato_gpio_state_5', 10)
-        if ( number_of_gpio > 6 ):
-            self.gpio_publisher_6 = self.create_publisher(Bool, 'numato_gpio_state_6', 10)
-        if ( number_of_gpio > 7 ):
-            self.gpio_publisher_7 = self.create_publisher(Bool, 'numato_gpio_state_7', 10)
+            self.gpio_state_array[index_count] = state
 
 
     def relay_timer_callback(self):
-        if ( not(self.relay_publisher_0 == None) ):
-            msg_0 = Bool()
-            msg_0.data = self.get_relay_state(0)
-            self.relay_publisher_0.publish(msg_0)
-            self.get_logger().info('Publishing relay 0: "%s"' % msg_0.data)
-
-        if ( not(self.relay_publisher_1 == None) ):
-            msg_1 = Bool()
-            msg_1.data = self.get_relay_state(1)
-            self.relay_publisher_1.publish(msg_1)
-            self.get_logger().info('Publishing relay 1: "%s"' % msg_1.data)
-
-        if ( not(self.relay_publisher_2 == None) ):
-            msg_2 = Bool()
-            msg_2.data = self.get_relay_state(2)
-            self.relay_publisher_2.publish(msg_2)
-            self.get_logger().info('Publishing relay 2: "%s"' % msg_2.data)
-
-        if ( not(self.relay_publisher_3 == None) ):
-            msg_3 = Bool()
-            msg_3.data = self.get_relay_state(3)
-            self.relay_publisher_3.publish(msg_3)
-            self.get_logger().info('Publishing relay 3: "%s"' % msg_3.data)
-
-        if ( not(self.relay_publisher_4 == None) ):
-            msg_4 = Bool()
-            msg_4.data = self.get_relay_state(4)
-            self.relay_publisher_4.publish(msg_4)
-            self.get_logger().info('Publishing relay 4: "%s"' % msg_4.data)
-
-        if ( not(self.relay_publisher_5 == None) ):
-            msg_5 = Bool()
-            msg_5.data = self.get_relay_state(5)
-            self.relay_publisher_5.publish(msg_5)
-            self.get_logger().info('Publishing relay 5: "%s"' % msg_5.data)
-
-        if ( not(self.relay_publisher_6 == None) ):
-            msg_6 = Bool()
-            msg_6.data = self.get_relay_state(6)
-            self.relay_publisher_6.publish(msg_6)
-            self.get_logger().info('Publishing relay 6: "%s"' % msg_6.data)
-
-        if ( not(self.relay_publisher_7 == None) ):
-            msg_7 = Bool()
-            msg_7.data = self.get_relay_state(7)
-            self.relay_publisher_7.publish(msg_7)
-            self.get_logger().info('Publishing relay 7: "%s"' % msg_7.data)
+        msg = RelayStates()
+        msg.states = list(self.relay_state_array)
+        self.relay_publisher.publish(msg)
+        self.get_logger().debug('Publishing relay states: "%s"' % msg.states)
 
 
     def gpio_timer_callback(self):
         self.update_gpio()
 
-        if ( not(self.gpio_publisher_0 == None) ):
-            gpio_msg_0 = Bool()
-            gpio_msg_0.data = self.get_gpio_state(0)
-            self.gpio_publisher_0.publish(gpio_msg_0)
-            self.get_logger().info('Publishing GPIO 0: "%s"' % gpio_msg_0.data)
-
-        if ( not(self.gpio_publisher_1 == None) ):
-            gpio_msg_1 = Bool()
-            gpio_msg_1.data = self.get_gpio_state(1)
-            self.gpio_publisher_1.publish(gpio_msg_1)
-            self.get_logger().info('Publishing GPIO 1: "%s"' % gpio_msg_1.data)
-
-        if ( not(self.gpio_publisher_2 == None) ):
-            gpio_msg_2 = Bool()
-            gpio_msg_2.data = self.get_gpio_state(2)
-            self.gpio_publisher_2.publish(gpio_msg_2)
-            self.get_logger().info('Publishing GPIO 2: "%s"' % gpio_msg_2.data)
-
-        if ( not(self.gpio_publisher_3 == None) ):
-            gpio_msg_3 = Bool()
-            gpio_msg_3.data = self.get_gpio_state(3)
-            self.gpio_publisher_3.publish(gpio_msg_3)
-            self.get_logger().info('Publishing GPIO 3: "%s"' % gpio_msg_3.data)
-
-        if ( not(self.gpio_publisher_4 == None) ):
-            gpio_msg_4 = Bool()
-            gpio_msg_4.data = self.get_gpio_state(4)
-            self.gpio_publisher_4.publish(gpio_msg_4)
-            self.get_logger().info('Publishing GPIO 4: "%s"' % gpio_msg_4.data)
-
-        if ( not(self.gpio_publisher_5 == None) ):
-            gpio_msg_5 = Bool()
-            gpio_msg_5.data = self.get_gpio_state(5)
-            self.gpio_publisher_5.publish(gpio_msg_5)
-            self.get_logger().info('Publishing GPIO 5: "%s"' % gpio_msg_5.data)
-
-        if ( not(self.gpio_publisher_6 == None) ):
-            gpio_msg_6 = Bool()
-            gpio_msg_6.data = self.get_gpio_state(6)
-            self.gpio_publisher_6.publish(gpio_msg_6)
-            self.get_logger().info('Publishing GPIO 6: "%s"' % gpio_msg_6.data)
-
-        if ( not(self.gpio_publisher_7 == None) ):
-            gpio_msg_7 = Bool()
-            gpio_msg_7.data = self.get_gpio_state(7)
-            self.gpio_publisher_7.publish(gpio_msg_7)
-            self.get_logger().info('Publishing GPIO 7: "%s"' % gpio_msg_7.data)
+        msg = GpioStates()
+        msg.states = list(self.gpio_state_array)
+        self.gpio_publisher.publish(msg)
+        self.get_logger().debug('Publishing GPIO states: "%s"' % msg.states)
 
 
 def main():
     rclpy.init()
     numato_relay = NumatoRelay()
     numato_relay.read_relay()
-    numato_relay.update_relay_publishers()
     numato_relay.read_gpio()
-    numato_relay.update_gpio_publishers()
     rclpy.spin(numato_relay)
     numato_relay.destroy_node()
     rclpy.shutdown()

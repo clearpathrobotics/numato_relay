@@ -3,7 +3,7 @@
 <package format="3">
   <name>numato_relay_interfaces</name>
   <version>0.3.0</version>
-  <description>Numato relay interface for service</description>
+  <description>Numato relay state messages and service interfaces</description>
   <maintainer email="rfaultless@clearpathrobotics.com">Rhys Faultless</maintainer>
   <license>BSD</license>
 

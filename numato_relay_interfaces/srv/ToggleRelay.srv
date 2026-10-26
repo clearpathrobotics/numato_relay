@@ -1,0 +1,8 @@
+uint32 relay_channel
+# Desired final state; cycle through the opposite state if already satisfied.
+bool relay_state
+---
+bool success
+# Driver-tracked state; valid only when success is true.
+bool relay_state
+string message
