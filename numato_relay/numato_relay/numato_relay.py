@@ -52,30 +52,16 @@ class NumatoRelay(Node):
         self.serial_lock = Lock()
 
         self.relay_state_array = []
-        self.relay_publisher_0 = None
-        self.relay_publisher_1 = None
-        self.relay_publisher_2 = None
-        self.relay_publisher_3 = None
-        self.relay_publisher_4 = None
-        self.relay_publisher_5 = None
-        self.relay_publisher_6 = None
-        self.relay_publisher_7 = None
+        self.relay_publishers = []
 
         self.gpio_state_array = []
-        self.gpio_publisher_0 = None
-        self.gpio_publisher_1 = None
-        self.gpio_publisher_2 = None
-        self.gpio_publisher_3 = None
-        self.gpio_publisher_4 = None
-        self.gpio_publisher_5 = None
-        self.gpio_publisher_6 = None
-        self.gpio_publisher_7 = None
-        
+        self.gpio_publishers = []
+
 
     def set_relay(self, request, response):
         response.relay_response_string = ' '
         response.relay_response_bool = False
-        if (type(request.relay_state) is bool):     
+        if (type(request.relay_state) is bool):
             if (type(request.relay_channel) is int):
                 if (not (request.relay_channel < 0) ):
                     if ( not(request.relay_channel > (self.get_number_of_relays()-1) ) ):
@@ -137,26 +123,12 @@ class NumatoRelay(Node):
 
     def get_number_of_relays(self):
         return len(self.relay_state_array)
-    
+
 
     def update_relay_publishers(self):
         number_of_relays = self.get_number_of_relays()
-        if ( number_of_relays > 0 ):
-            self.relay_publisher_0 = self.create_publisher(Bool, 'numato_relay_state_0', 10)
-        if ( number_of_relays > 1 ):
-            self.relay_publisher_1 = self.create_publisher(Bool, 'numato_relay_state_1', 10)
-        if ( number_of_relays > 2 ):
-            self.relay_publisher_2 = self.create_publisher(Bool, 'numato_relay_state_2', 10)
-        if ( number_of_relays > 3 ):
-            self.relay_publisher_3 = self.create_publisher(Bool, 'numato_relay_state_3', 10)
-        if ( number_of_relays > 4 ):
-            self.relay_publisher_4 = self.create_publisher(Bool, 'numato_relay_state_4', 10)
-        if ( number_of_relays > 5 ):
-            self.relay_publisher_5 = self.create_publisher(Bool, 'numato_relay_state_5', 10)
-        if ( number_of_relays > 6 ):
-            self.relay_publisher_6 = self.create_publisher(Bool, 'numato_relay_state_6', 10)
-        if ( number_of_relays > 7 ):
-            self.relay_publisher_7 = self.create_publisher(Bool, 'numato_relay_state_7', 10)
+        for i in range(number_of_relays):
+            self.relay_publishers.append(self.create_publisher(Bool, f'numato_relay_state_{i}', 10))
 
 
     def read_gpio(self):
@@ -211,124 +183,26 @@ class NumatoRelay(Node):
 
     def update_gpio_publishers(self):
         number_of_gpio = self.get_number_of_gpio()
-        if ( number_of_gpio > 0 ):
-            self.gpio_publisher_0 = self.create_publisher(Bool, 'numato_gpio_state_0', 10)
-        if ( number_of_gpio > 1 ):
-            self.gpio_publisher_1 = self.create_publisher(Bool, 'numato_gpio_state_1', 10)
-        if ( number_of_gpio > 2 ):
-            self.gpio_publisher_2 = self.create_publisher(Bool, 'numato_gpio_state_2', 10)
-        if ( number_of_gpio > 3 ):
-            self.gpio_publisher_3 = self.create_publisher(Bool, 'numato_gpio_state_3', 10)
-        if ( number_of_gpio > 4 ):
-            self.gpio_publisher_4 = self.create_publisher(Bool, 'numato_gpio_state_4', 10)
-        if ( number_of_gpio > 5 ):
-            self.gpio_publisher_5 = self.create_publisher(Bool, 'numato_gpio_state_5', 10)
-        if ( number_of_gpio > 6 ):
-            self.gpio_publisher_6 = self.create_publisher(Bool, 'numato_gpio_state_6', 10)
-        if ( number_of_gpio > 7 ):
-            self.gpio_publisher_7 = self.create_publisher(Bool, 'numato_gpio_state_7', 10)
+        for i in range(number_of_gpio):
+            self.gpio_publishers.append(self.create_publisher(Bool, f'numato_gpio_state_{i}', 10))
 
 
     def relay_timer_callback(self):
-        if ( not(self.relay_publisher_0 == None) ):
-            msg_0 = Bool()
-            msg_0.data = self.get_relay_state(0)
-            self.relay_publisher_0.publish(msg_0)
-            self.get_logger().info('Publishing relay 0: "%s"' % msg_0.data)
-
-        if ( not(self.relay_publisher_1 == None) ):
-            msg_1 = Bool()
-            msg_1.data = self.get_relay_state(1)
-            self.relay_publisher_1.publish(msg_1)
-            self.get_logger().info('Publishing relay 1: "%s"' % msg_1.data)
-
-        if ( not(self.relay_publisher_2 == None) ):
-            msg_2 = Bool()
-            msg_2.data = self.get_relay_state(2)
-            self.relay_publisher_2.publish(msg_2)
-            self.get_logger().info('Publishing relay 2: "%s"' % msg_2.data)
-
-        if ( not(self.relay_publisher_3 == None) ):
-            msg_3 = Bool()
-            msg_3.data = self.get_relay_state(3)
-            self.relay_publisher_3.publish(msg_3)
-            self.get_logger().info('Publishing relay 3: "%s"' % msg_3.data)
-
-        if ( not(self.relay_publisher_4 == None) ):
-            msg_4 = Bool()
-            msg_4.data = self.get_relay_state(4)
-            self.relay_publisher_4.publish(msg_4)
-            self.get_logger().info('Publishing relay 4: "%s"' % msg_4.data)
-
-        if ( not(self.relay_publisher_5 == None) ):
-            msg_5 = Bool()
-            msg_5.data = self.get_relay_state(5)
-            self.relay_publisher_5.publish(msg_5)
-            self.get_logger().info('Publishing relay 5: "%s"' % msg_5.data)
-
-        if ( not(self.relay_publisher_6 == None) ):
-            msg_6 = Bool()
-            msg_6.data = self.get_relay_state(6)
-            self.relay_publisher_6.publish(msg_6)
-            self.get_logger().info('Publishing relay 6: "%s"' % msg_6.data)
-
-        if ( not(self.relay_publisher_7 == None) ):
-            msg_7 = Bool()
-            msg_7.data = self.get_relay_state(7)
-            self.relay_publisher_7.publish(msg_7)
-            self.get_logger().info('Publishing relay 7: "%s"' % msg_7.data)
+        for i, pub in enumerate(self.relay_publishers):
+            msg = Bool()
+            msg.data = self.get_relay_state(i)
+            pub.publish(msg)
+            self.get_logger().info(f'Publishing relay {i}: "{msg.data}"')
 
 
     def gpio_timer_callback(self):
         self.update_gpio()
 
-        if ( not(self.gpio_publisher_0 == None) ):
-            gpio_msg_0 = Bool()
-            gpio_msg_0.data = self.get_gpio_state(0)
-            self.gpio_publisher_0.publish(gpio_msg_0)
-            self.get_logger().info('Publishing GPIO 0: "%s"' % gpio_msg_0.data)
-
-        if ( not(self.gpio_publisher_1 == None) ):
-            gpio_msg_1 = Bool()
-            gpio_msg_1.data = self.get_gpio_state(1)
-            self.gpio_publisher_1.publish(gpio_msg_1)
-            self.get_logger().info('Publishing GPIO 1: "%s"' % gpio_msg_1.data)
-
-        if ( not(self.gpio_publisher_2 == None) ):
-            gpio_msg_2 = Bool()
-            gpio_msg_2.data = self.get_gpio_state(2)
-            self.gpio_publisher_2.publish(gpio_msg_2)
-            self.get_logger().info('Publishing GPIO 2: "%s"' % gpio_msg_2.data)
-
-        if ( not(self.gpio_publisher_3 == None) ):
-            gpio_msg_3 = Bool()
-            gpio_msg_3.data = self.get_gpio_state(3)
-            self.gpio_publisher_3.publish(gpio_msg_3)
-            self.get_logger().info('Publishing GPIO 3: "%s"' % gpio_msg_3.data)
-
-        if ( not(self.gpio_publisher_4 == None) ):
-            gpio_msg_4 = Bool()
-            gpio_msg_4.data = self.get_gpio_state(4)
-            self.gpio_publisher_4.publish(gpio_msg_4)
-            self.get_logger().info('Publishing GPIO 4: "%s"' % gpio_msg_4.data)
-
-        if ( not(self.gpio_publisher_5 == None) ):
-            gpio_msg_5 = Bool()
-            gpio_msg_5.data = self.get_gpio_state(5)
-            self.gpio_publisher_5.publish(gpio_msg_5)
-            self.get_logger().info('Publishing GPIO 5: "%s"' % gpio_msg_5.data)
-
-        if ( not(self.gpio_publisher_6 == None) ):
-            gpio_msg_6 = Bool()
-            gpio_msg_6.data = self.get_gpio_state(6)
-            self.gpio_publisher_6.publish(gpio_msg_6)
-            self.get_logger().info('Publishing GPIO 6: "%s"' % gpio_msg_6.data)
-
-        if ( not(self.gpio_publisher_7 == None) ):
-            gpio_msg_7 = Bool()
-            gpio_msg_7.data = self.get_gpio_state(7)
-            self.gpio_publisher_7.publish(gpio_msg_7)
-            self.get_logger().info('Publishing GPIO 7: "%s"' % gpio_msg_7.data)
+        for i, pub in enumerate(self.gpio_publishers):
+            gpio_msg = Bool()
+            gpio_msg.data = self.get_gpio_state(i)
+            pub.publish(gpio_msg)
+            self.get_logger().info(f'Publishing GPIO {i}: "{gpio_msg.data}"')
 
 
 def main():
