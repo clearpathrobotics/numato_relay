@@ -37,17 +37,17 @@ from std_msgs.msg import Bool
 
 class NumatoRelay(Node):
     def __init__(self):
-        super().__init__('NumatoRelay')
-        self.service_set_relay = self.create_service(SetRelay, 'set_relay', self.set_relay)
+        super().__init__("NumatoRelay")
+        self.service_set_relay = self.create_service(SetRelay, "set_relay", self.set_relay)
         relay_timer_period = 1.0  # seconds
         gpio_timer_period = 3.0  # seconds
         self.relay_timer = self.create_timer(relay_timer_period, self.relay_timer_callback)
         #self.gpio_timer = self.create_timer(gpio_timer_period, self.gpio_timer_callback)
-        self.declare_parameter('port', '/dev/ttyACM0')
-        self.port = self.get_parameter('port').get_parameter_value().string_value
-        self.declare_parameter('baud', 19200)
-        self.baud = self.get_parameter('baud').get_parameter_value().integer_value
-        self.serial_port = serial.Serial(self.port, self.baud, timeout=1)
+        self.declare_parameter("port", "/dev/ttyACM0")
+        port = self.get_parameter("port").get_parameter_value().string_value
+        self.declare_parameter("baud", 19200)
+        baud = self.get_parameter("baud").get_parameter_value().integer_value
+        self.serial_port = serial.Serial(port, baud, timeout=1)
         self.SERIAL_READ_SIZE = 25
         self.serial_lock = Lock()
 
@@ -59,50 +59,42 @@ class NumatoRelay(Node):
 
 
     def set_relay(self, request, response):
-        response.relay_response_string = ' '
         response.relay_response_bool = False
-        if (type(request.relay_state) is bool):
-            if (type(request.relay_channel) is int):
-                if (not (request.relay_channel < 0) ):
-                    if ( not(request.relay_channel > (self.get_number_of_relays()-1) ) ):
-                        if (not (self.get_relay_state(request.relay_channel) == request.relay_state) ): # Check if the requested relay_channel is already set to the requested relay_state
-                            if (request.relay_state):
-                                relay_state = 'on' # 'on' or 'off' of whether the relay should be Closed or Open ( on = True = Closed = relay powered )
-                                response.relay_response_bool = True
-                                response.relay_response_string = 'Relay has been turned on.'
-                            else:
-                                relay_state = 'off'
-                                response.relay_response_bool = False
-                                response.relay_response_string = 'Relay has been turned off.'
-                            self.change_relay_state(request.relay_channel, request.relay_state)
-                            self.serial_lock.acquire()
-                            self.serial_port.write(f"relay {relay_state} {request.relay_channel}\n\r".encode("utf-8"))
-                            self.serial_port.flush()
-                            self.serial_lock.release()
-                        else:
-                            response.relay_response_string = 'Relay is already set to ' + str(request.relay_state)
-                    else:
-                        response.relay_response_string = 'The requested relay_channel is larger than what this Relay PCBA supports'
-                else:
-                    response.relay_response_string = 'The requested relay_channel needs to be a positive Integer'
-            else:
-                response.relay_response_string = 'The requested relay_channel needs to be an Integer'
-        else:
-            response.relay_response_string = 'The requested relay_state needs to be an Bool'
+        num_relays = self.get_number_of_relays()
+
+        if not isinstance(request.relay_state, bool):
+            response.relay_response_string = f"Invalid type: relay_state should be bool, got {type(request.relay_state)}"
+            return response
+        if not isinstance(request.relay_channel, int):
+            response.relay_response_string = f"Invalid type: relay_channel should be int, got {type(request.relay_channel)}"
+            return response
+        if request.relay_channel not in range(num_relays):
+            response.relay_response_string = f"The requested relay_channel not in supported range (0..{num_relays - 1})"
+            return response
+
+        relay_state = "on" if request.relay_state else "off"
+        response.relay_response_bool = request.relay_state
+        response.relay_response_string = f"Relay has been turned {relay_state}."
+
+        self.change_relay_state(request.relay_channel, request.relay_state)
+        with self.serial_lock:
+            self.serial_port.write(f"relay {relay_state} {request.relay_channel}\n\r".encode("utf-8"))
+            self.serial_port.flush()
+
         return response
 
 
     def read_relay(self):
         index_count = 0
         while True:
-            self.serial_lock.acquire()
-            self.serial_port.write(f"relay read {index_count} \n\r".encode("utf-8"))
-            response = str(self.serial_port.read(self.SERIAL_READ_SIZE))
-            self.serial_port.flush()
-            self.serial_lock.release()
-            if 'on' in response:
+            with self.serial_lock:
+                self.serial_port.write(f"relay read {index_count} \n\r".encode("utf-8"))
+                response = str(self.serial_port.read(self.SERIAL_READ_SIZE))
+                self.serial_port.flush()
+
+            if "on" in response:
                 self.set_relay_state(index_count, True)
-            elif 'off' in response:
+            elif "off" in response:
                 self.set_relay_state(index_count, False)
             else:
                 break
@@ -140,9 +132,9 @@ class NumatoRelay(Node):
             self.serial_port.flush()
             self.serial_lock.release()
             response = response.lstrip(response[0:13])
-            if '1' in response:
+            if "1" in response:
                 self.set_gpio_state(index_count, True)
-            elif '0' in response:
+            elif "0" in response:
                 self.set_gpio_state(index_count, False)
             else:
                 break
@@ -157,9 +149,9 @@ class NumatoRelay(Node):
             self.serial_port.flush()
             self.serial_lock.release()
             response = response.lstrip(response[0:13])
-            if '1' in response:
+            if "1" in response:
                 self.set_gpio_state(index_count, True)
-            elif '0' in response:
+            elif "0" in response:
                 self.set_gpio_state(index_count, False)
             else:
                 break
@@ -184,7 +176,7 @@ class NumatoRelay(Node):
     def update_gpio_publishers(self):
         number_of_gpio = self.get_number_of_gpio()
         for i in range(number_of_gpio):
-            self.gpio_publishers.append(self.create_publisher(Bool, f'numato_gpio_state_{i}', 10))
+            self.gpio_publishers.append(self.create_publisher(Bool, f"numato_gpio_state_{i}", 10))
 
 
     def relay_timer_callback(self):
@@ -192,7 +184,7 @@ class NumatoRelay(Node):
             msg = Bool()
             msg.data = self.get_relay_state(i)
             pub.publish(msg)
-            self.get_logger().info(f'Publishing relay {i}: "{msg.data}"')
+            self.get_logger().info(f"Publishing relay {i}: '{msg.data}'")
 
 
     def gpio_timer_callback(self):
@@ -202,7 +194,7 @@ class NumatoRelay(Node):
             gpio_msg = Bool()
             gpio_msg.data = self.get_gpio_state(i)
             pub.publish(gpio_msg)
-            self.get_logger().info(f'Publishing GPIO {i}: "{gpio_msg.data}"')
+            self.get_logger().info(f"Publishing GPIO {i}: '{gpio_msg.data}'")
 
 
 def main():
@@ -217,5 +209,5 @@ def main():
     rclpy.shutdown()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
