@@ -69,12 +69,12 @@ class NumatoRelay(Node):
             response.relay_response_string = f"Invalid type: relay_channel should be int, got {type(request.relay_channel)}"
             return response
         if request.relay_channel not in range(num_relays):
-            response.relay_response_string = f"The requested relay_channel not in supported range (0..{num_relays - 1})"
+            response.relay_response_string = f"The requested relay_channel {request.relay_channel} not in supported range (0..{num_relays - 1})"
             return response
 
         relay_state = "on" if request.relay_state else "off"
         response.relay_response_bool = request.relay_state
-        response.relay_response_string = f"Relay has been turned {relay_state}."
+        response.relay_response_string = f"Relay {request.relay_channel} has been turned {relay_state}."
 
         self.change_relay_state(request.relay_channel, request.relay_state)
         with self.serial_lock:
