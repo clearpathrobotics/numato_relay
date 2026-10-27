@@ -84,14 +84,19 @@ class NumatoRelay(Node):
         return response
 
 
+    def serial_query(self, command):
+        """Write a command and read its response under the serial lock."""
+        with self.serial_lock:
+            self.serial_port.write(command.encode("utf-8"))
+            response = str(self.serial_port.read(self.SERIAL_READ_SIZE))
+            self.serial_port.flush()
+        return response
+
+
     def read_relay(self):
         index_count = 0
         while True:
-            with self.serial_lock:
-                self.serial_port.write(f"relay read {index_count} \n\r".encode("utf-8"))
-                response = str(self.serial_port.read(self.SERIAL_READ_SIZE))
-                self.serial_port.flush()
-
+            response = self.serial_query(f"relay read {index_count} \n\r")
             if "on" in response:
                 self.set_relay_state(index_count, True)
             elif "off" in response:
@@ -126,11 +131,7 @@ class NumatoRelay(Node):
     def read_gpio(self):
         index_count = 0
         while True:
-            self.serial_lock.acquire()
-            self.serial_port.write(f"gpio read {index_count} \n\r".encode("utf-8"))
-            response = str(self.serial_port.read(self.SERIAL_READ_SIZE))
-            self.serial_port.flush()
-            self.serial_lock.release()
+            response = self.serial_query(f"gpio read {index_count} \n\r")
             response = response.lstrip(response[0:13])
             if "1" in response:
                 self.set_gpio_state(index_count, True)
@@ -143,11 +144,7 @@ class NumatoRelay(Node):
 
     def update_gpio(self):
         for index_count in range(self.get_number_of_gpio()):
-            self.serial_lock.acquire()
-            self.serial_port.write(f"gpio read {index_count} \n\r".encode("utf-8"))
-            response = str(self.serial_port.read(self.SERIAL_READ_SIZE))
-            self.serial_port.flush()
-            self.serial_lock.release()
+            response = self.serial_query(f"gpio read {index_count} \n\r")
             response = response.lstrip(response[0:13])
             if "1" in response:
                 self.set_gpio_state(index_count, True)
