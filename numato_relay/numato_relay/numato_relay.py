@@ -60,7 +60,7 @@ class NumatoRelay(Node):
 
     def set_relay(self, request, response):
         response.relay_response_bool = False
-        num_relays = self.get_number_of_relays()
+        num_relays = len(self.relay_state_array)
 
         if not isinstance(request.relay_state, bool):
             response.relay_response_string = f"Invalid type: relay_state should be bool, got {type(request.relay_state)}"
@@ -76,7 +76,7 @@ class NumatoRelay(Node):
         response.relay_response_bool = request.relay_state
         response.relay_response_string = f"Relay {request.relay_channel} has been turned {relay_state}."
 
-        self.change_relay_state(request.relay_channel, request.relay_state)
+        self.relay_state_array[request.relay_channel] = request.relay_state
         with self.serial_lock:
             self.serial_port.write(f"relay {relay_state} {request.relay_channel}\n\r".encode("utf-8"))
             self.serial_port.flush()
@@ -98,80 +98,53 @@ class NumatoRelay(Node):
         while True:
             response = self.serial_query(f"relay read {index_count} \n\r")
             if "on" in response:
-                self.set_relay_state(index_count, True)
+                self.relay_state_array.insert(index_count, True)
             elif "off" in response:
-                self.set_relay_state(index_count, False)
+                self.relay_state_array.insert(index_count, False)
             else:
                 break
             index_count += 1
 
 
-    def change_relay_state(self, index, content):
-        self.relay_state_array[index] = content
-
-
-    def set_relay_state(self, index, content):
-        self.relay_state_array.insert(index, content)
-
-
-    def get_relay_state(self, index):
-        return self.relay_state_array[index]
-
-
-    def get_number_of_relays(self):
-        return len(self.relay_state_array)
-
-
     def update_relay_publishers(self):
-        number_of_relays = self.get_number_of_relays()
+        number_of_relays = len(self.relay_state_array)
         for i in range(number_of_relays):
             self.relay_publishers.append(self.create_publisher(Bool, f'numato_relay_state_{i}', 10))
+
+
+    def read_gpio_channel(self, channel):
+        """Return the GPIO state, or None when no value is recognized."""
+        response = self.serial_query(f"gpio read {channel} \n\r")
+        response = response.lstrip(response[0:13])
+        if "1" in response:
+            return True
+        if "0" in response:
+            return False
+        self.get_logger().debug(
+            f"No GPIO state recognized for channel {channel}: {response!r}")
+        return None
 
 
     def read_gpio(self):
         index_count = 0
         while True:
-            response = self.serial_query(f"gpio read {index_count} \n\r")
-            response = response.lstrip(response[0:13])
-            if "1" in response:
-                self.set_gpio_state(index_count, True)
-            elif "0" in response:
-                self.set_gpio_state(index_count, False)
-            else:
+            state = self.read_gpio_channel(index_count)
+            if state is None:
                 break
+            self.gpio_state_array.insert(index_count, state)
             index_count += 1
 
 
     def update_gpio(self):
-        for index_count in range(self.get_number_of_gpio()):
-            response = self.serial_query(f"gpio read {index_count} \n\r")
-            response = response.lstrip(response[0:13])
-            if "1" in response:
-                self.set_gpio_state(index_count, True)
-            elif "0" in response:
-                self.set_gpio_state(index_count, False)
-            else:
+        for index_count in range(len(self.gpio_state_array)):
+            state = self.read_gpio_channel(index_count)
+            if state is None:
                 break
-
-
-    def change_gpio_state(self, index, content):
-        self.gpio_state_array[index] = content
-
-
-    def set_gpio_state(self, index, content):
-        self.gpio_state_array.insert(index, content)
-
-
-    def get_gpio_state(self, index):
-        return self.gpio_state_array[index]
-
-
-    def get_number_of_gpio(self):
-        return len(self.gpio_state_array)
+            self.gpio_state_array.insert(index_count, state)
 
 
     def update_gpio_publishers(self):
-        number_of_gpio = self.get_number_of_gpio()
+        number_of_gpio = len(self.gpio_state_array)
         for i in range(number_of_gpio):
             self.gpio_publishers.append(self.create_publisher(Bool, f"numato_gpio_state_{i}", 10))
 
@@ -179,7 +152,7 @@ class NumatoRelay(Node):
     def relay_timer_callback(self):
         for i, pub in enumerate(self.relay_publishers):
             msg = Bool()
-            msg.data = self.get_relay_state(i)
+            msg.data = self.relay_state_array[i]
             pub.publish(msg)
             self.get_logger().info(f"Publishing relay {i}: '{msg.data}'")
 
@@ -189,7 +162,7 @@ class NumatoRelay(Node):
 
         for i, pub in enumerate(self.gpio_publishers):
             gpio_msg = Bool()
-            gpio_msg.data = self.get_gpio_state(i)
+            gpio_msg.data = self.gpio_state_array[i]
             pub.publish(gpio_msg)
             self.get_logger().info(f"Publishing GPIO {i}: '{gpio_msg.data}'")
 
