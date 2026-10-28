@@ -84,10 +84,10 @@ class NumatoRelay(Node):
         response.relay_response_bool = request.relay_state
         response.relay_response_string = f"Relay {request.relay_channel} has been turned {relay_state}."
 
-        self.relay_state_array[request.relay_channel] = request.relay_state
         with self.serial_lock:
             self.serial_port.write(f"relay {relay_state} {request.relay_channel}\n\r".encode("utf-8"))
             self.serial_port.flush()
+            self.relay_state_array[request.relay_channel] = request.relay_state
 
         return response
 

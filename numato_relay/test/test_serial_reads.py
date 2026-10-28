@@ -208,10 +208,15 @@ def test_gpio_polling_stops_at_unrecognized_response(relay):
 
 @pytest.mark.parametrize('desired', [False, True])
 def test_set_relay_updates_list(relay, desired):
-    """Keep relay state assignment and serial command behavior unchanged."""
+    """Update cached state only after the serial command is flushed."""
     node, port = relay
     node.relay_state_array = [not desired]
 
+    def assert_state_not_updated(*args):
+        assert node.relay_state_array == [not desired]
+
+    port.write.side_effect = assert_state_not_updated
+    port.flush.side_effect = assert_state_not_updated
     response = node.set_relay(
         SetRelay.Request(relay_channel=0, relay_state=desired), SetRelay.Response())
 
@@ -219,6 +224,24 @@ def test_set_relay_updates_list(relay, desired):
     assert node.relay_state_array == [desired]
     state = 'on' if desired else 'off'
     port.write.assert_called_once_with(f'relay {state} 0\n\r'.encode('utf-8'))
+    port.flush.assert_called_once_with()
+
+
+@pytest.mark.parametrize('operation', ['write', 'flush'])
+def test_set_relay_preserves_state_when_serial_write_fails(relay, operation):
+    """Propagate serial failures without changing the last tracked state."""
+    node, port = relay
+    node.relay_state_array = [False]
+    error = SerialException('Serial failure')
+    getattr(port, operation).side_effect = error
+
+    with pytest.raises(SerialException) as caught:
+        node.set_relay(
+            SetRelay.Request(relay_channel=0, relay_state=True), SetRelay.Response())
+
+    assert caught.value is error
+    assert node.relay_state_array == [False]
+    assert not node.serial_lock.locked()
 
 
 @pytest.mark.parametrize('kind', ['relay', 'gpio'])
