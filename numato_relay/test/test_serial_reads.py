@@ -91,7 +91,7 @@ def test_discovery_reads(relay, kind, responses):
 
 
 def test_gpio_polling_reads(relay):
-    """Preserve polling commands and existing insertion behavior."""
+    """Replace existing GPIO states without changing channel count."""
     node, port = relay
     node.gpio_state_array = [False, True]
     port.read.side_effect = [b'gpio read 0\r\n1\r\n>', b'gpio read 1\r\n0\r\n>']
@@ -103,7 +103,28 @@ def test_gpio_polling_reads(relay):
     ]
     assert port.read.call_args_list == [call(node.SERIAL_READ_SIZE)] * 2
     assert port.flush.call_count == 2
-    assert node.gpio_state_array == [True, False, False, True]
+    assert node.gpio_state_array == [True, False]
+
+
+def test_repeated_gpio_polling_preserves_channel_order_and_count(relay):
+    """Repeated polls update each channel in place rather than growing the list."""
+    node, port = relay
+    node.gpio_state_array = [False, True]
+    port.read.side_effect = [
+        b'gpio read 0\r\n1\r\n>', b'gpio read 1\r\n0\r\n>',
+        b'gpio read 0\r\n0\r\n>', b'gpio read 1\r\n1\r\n>',
+    ]
+
+    node.update_gpio()
+    assert node.gpio_state_array == [True, False]
+
+    node.update_gpio()
+    assert node.gpio_state_array == [False, True]
+    assert len(node.gpio_state_array) == 2
+    assert port.write.call_args_list == [
+        call(b'gpio read 0 \n\r'), call(b'gpio read 1 \n\r'),
+        call(b'gpio read 0 \n\r'), call(b'gpio read 1 \n\r'),
+    ]
 
 
 @pytest.mark.parametrize('response,expected', [

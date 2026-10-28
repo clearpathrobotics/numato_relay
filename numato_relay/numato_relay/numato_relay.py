@@ -140,7 +140,7 @@ class NumatoRelay(Node):
             state = self.read_gpio_channel(index_count)
             if state is None:
                 break
-            self.gpio_state_array.insert(index_count, state)
+            self.gpio_state_array[index_count] = state
 
 
     def update_gpio_publishers(self):
