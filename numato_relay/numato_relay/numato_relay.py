@@ -29,7 +29,7 @@
 
 import serial
 from threading import Lock
-from numato_relay_interfaces.srv import SetRelay
+from numato_relay_interfaces.srv import GetRelay, SetRelay
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Bool
@@ -61,34 +61,78 @@ class NumatoRelay(Node):
         self.gpio_publishers = []
 
         self.service_set_relay = self.create_service(SetRelay, "set_relay", self.set_relay)
+        self.service_get_relay = self.create_service(GetRelay, "get_relay", self.get_relay)
         self.relay_timer = self.create_timer(self.relay_timer_period, self.relay_timer_callback)
         # GPIO polling remains disabled.
         # self.gpio_timer = self.create_timer(self.gpio_timer_period, self.gpio_timer_callback)
 
 
     def set_relay(self, request, response):
-        response.relay_response_bool = False
-        num_relays = len(self.relay_state_array)
-
         if not isinstance(request.relay_state, bool):
-            response.relay_response_string = f"Invalid type: relay_state should be bool, got {type(request.relay_state)}"
-            return response
+            message = (
+                f"Invalid type: relay_state should be bool, got {type(request.relay_state)}")
+            return self.set_relay_error_response(response, message)
         if not isinstance(request.relay_channel, int):
-            response.relay_response_string = f"Invalid type: relay_channel should be int, got {type(request.relay_channel)}"
+            message = (
+                f"Invalid type: relay_channel should be int, got {type(request.relay_channel)}")
+            return self.set_relay_error_response(response, message)
+        if not self.validate_relay_channel(request.relay_channel, response):
             return response
-        if request.relay_channel not in range(num_relays):
-            response.relay_response_string = f"The requested relay_channel {request.relay_channel} not in supported range (0..{num_relays - 1})"
+
+        channel = request.relay_channel
+        if self.relay_state_array[channel] == request.relay_state:
+            response.success = True
+            response.relay_state = self.relay_state_array[channel]
+            response.message = (
+                f"Relay {channel} is already {'on' if request.relay_state else 'off'}.")
             return response
 
         relay_state = "on" if request.relay_state else "off"
-        response.relay_response_bool = request.relay_state
-        response.relay_response_string = f"Relay {request.relay_channel} has been turned {relay_state}."
+        response.success = True
+        response.relay_state = request.relay_state
+        response.message = f"Relay {channel} has been turned {relay_state}."
 
-        with self.serial_lock:
-            self.serial_port.write(f"relay {relay_state} {request.relay_channel}\n\r".encode("utf-8"))
-            self.serial_port.flush()
-            self.relay_state_array[request.relay_channel] = request.relay_state
+        try:
+            with self.serial_lock:
+                self.serial_port.write(
+                    f"relay {relay_state} {channel}\n\r".encode("utf-8"))
+                self.serial_port.flush()
+                self.relay_state_array[channel] = request.relay_state
+        except (serial.SerialException, OSError) as error:
+            message = f"Serial communication failed: {error}"
+            self.get_logger().error(
+                f"set_relay: relay_channel {channel}: {message}")
+            return self.set_relay_error_response(response, message)
 
+        return response
+
+
+    def set_relay_error_response(self, response, message):
+        response.success = False
+        response.relay_state = False
+        response.message = message
+        return response
+
+
+    def validate_relay_channel(self, channel, response):
+        if channel in range(len(self.relay_state_array)):
+            return True
+        message = (
+            f"The requested relay_channel {channel} is outside the supported range "
+            f"(0..{len(self.relay_state_array) - 1})")
+        self.get_logger().warning(f"set_relay: {message}")
+        self.set_relay_error_response(response, message)
+        return False
+
+
+    def get_relay(self, request, response):
+        if not self.validate_relay_channel(request.relay_channel, response):
+            return response
+
+        channel = request.relay_channel
+        response.success = True
+        response.relay_state = self.relay_state_array[channel]
+        response.message = f"Relay {channel} is {'on' if response.relay_state else 'off'}."
         return response
 
 

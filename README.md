@@ -93,6 +93,23 @@ ros2 run numato_relay service --ros-args -p relay_timer_period:=0.5
 
 ### Controlling a relay
 
+The `SetRelay` request contains a zero-based `uint32 relay_channel` and the desired
+`bool relay_state` (`True` = on/closed, `False` = off/open). The response contains
+`bool success`, `bool relay_state`, and `string message`. On success, `relay_state`
+is the driver's tracked state after the serial command has been written and flushed;
+the hardware is not read back for confirmation. On failure, `success` is false and
+`relay_state` is a placeholder false value, not an indication of the physical state.
+Invalid channels are logged and reported in `message`; serial I/O failures are logged
+and returned as failed responses. If the cached state already matches the requested
+state, the service returns success without sending a serial command. This optimization
+relies on the driver's cached state and cannot detect changes made directly to the
+hardware or by another controller.
+
+**Interface migration:** `relay_channel` changed from `uint8` to `uint32`, and the
+response fields changed from `relay_response_bool`/`relay_response_string` to
+`success`/`relay_state`/`message`. Rebuild the interface package and update and rebuild
+dependent clients to use the new response fields. The service name remains `set_relay`.
+
 After starting the package per the steps in Running the driver:
 1.  Open a new terminal.
 2.  Source the workspace:
@@ -108,6 +125,20 @@ After starting the package per the steps in Running the driver:
     -   Changing the boolean beside `relay_state:` to:
         -  True for closing the relay (_powered_)
         -  False for opening the relay (_unpowered_)
+
+### Reading a relay
+
+Call the `get_relay` service to retrieve the driver's tracked state without
+sending a command to the hardware:
+
+```
+ros2 service call get_relay numato_relay_interfaces/srv/GetRelay "{relay_channel: 3}"
+```
+
+The response uses the same `success`, `relay_state`, and `message` fields as
+`SetRelay`. The state is driver-tracked, not confirmed by reading back the relay
+hardware. When `success` is false, `relay_state` is a placeholder and must not
+be treated as the physical state.
 
 
 <br />

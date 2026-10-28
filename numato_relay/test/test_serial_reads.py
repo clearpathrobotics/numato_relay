@@ -6,11 +6,12 @@ from unittest.mock import Mock, call
 
 from numato_relay.numato_relay import NumatoRelay
 
-from numato_relay_interfaces.srv import SetRelay
+from numato_relay_interfaces.srv import GetRelay, SetRelay
 
 import pytest
 
 import rclpy
+from rclpy.serialization import deserialize_message, serialize_message
 
 from serial import SerialException
 
@@ -208,7 +209,7 @@ def test_gpio_polling_stops_at_unrecognized_response(relay):
 
 @pytest.mark.parametrize('desired', [False, True])
 def test_set_relay_updates_list(relay, desired):
-    """Update cached state only after the serial command is flushed."""
+    """Write changed relay state and update the cache only after a successful flush."""
     node, port = relay
     node.relay_state_array = [not desired]
 
@@ -220,28 +221,157 @@ def test_set_relay_updates_list(relay, desired):
     response = node.set_relay(
         SetRelay.Request(relay_channel=0, relay_state=desired), SetRelay.Response())
 
-    assert response.relay_response_bool is desired
+    assert response.success
+    assert response.relay_state is desired
+    assert response.message == f"Relay 0 has been turned {'on' if desired else 'off'}."
     assert node.relay_state_array == [desired]
     state = 'on' if desired else 'off'
     port.write.assert_called_once_with(f'relay {state} 0\n\r'.encode('utf-8'))
     port.flush.assert_called_once_with()
 
 
+@pytest.mark.parametrize('state', [False, True])
+def test_set_relay_skips_command_when_state_already_matches(relay, state):
+    """Return success without serial I/O when the requested state is already tracked."""
+    node, port = relay
+    node.relay_state_array = [state]
+
+    response = node.set_relay(
+        SetRelay.Request(relay_channel=0, relay_state=state), SetRelay.Response())
+
+    assert response.success
+    assert response.relay_state is state
+    assert response.message == f"Relay 0 is already {'on' if state else 'off'}."
+    assert node.relay_state_array == [state]
+    assert port.mock_calls == []
+
+
 @pytest.mark.parametrize('operation', ['write', 'flush'])
-def test_set_relay_preserves_state_when_serial_write_fails(relay, operation):
-    """Propagate serial failures without changing the last tracked state."""
+@pytest.mark.parametrize('error_type', [SerialException, OSError])
+def test_set_relay_reports_serial_failure(relay, operation, error_type, monkeypatch):
+    """Return a logged error without changing the last tracked state."""
     node, port = relay
     node.relay_state_array = [False]
-    error = SerialException('Serial failure')
+    error = error_type('Serial failure')
     getattr(port, operation).side_effect = error
+    logger = Mock()
+    monkeypatch.setattr(node, 'get_logger', lambda: logger)
 
-    with pytest.raises(SerialException) as caught:
-        node.set_relay(
-            SetRelay.Request(relay_channel=0, relay_state=True), SetRelay.Response())
+    response = node.set_relay(
+        SetRelay.Request(relay_channel=0, relay_state=True),
+        SetRelay.Response(success=True, relay_state=True, message='Previous response'),
+    )
 
-    assert caught.value is error
+    assert not response.success
+    assert not response.relay_state
+    assert response.message == 'Serial communication failed: Serial failure'
+    logger.error.assert_called_once_with(
+        'set_relay: relay_channel 0: Serial communication failed: Serial failure')
     assert node.relay_state_array == [False]
     assert not node.serial_lock.locked()
+
+
+@pytest.mark.parametrize('channel,states', [
+    (0, []),
+    (2, [True, False]),
+])
+def test_set_relay_rejects_unsupported_channel(relay, channel, states, monkeypatch):
+    """Return a consistent failure and log without sending a serial command."""
+    node, port = relay
+    node.relay_state_array = states
+    logger = Mock()
+    monkeypatch.setattr(node, 'get_logger', lambda: logger)
+    response = node.set_relay(
+        SetRelay.Request(relay_channel=channel, relay_state=True),
+        SetRelay.Response(success=True, relay_state=True, message='Previous response'),
+    )
+
+    assert not response.success
+    assert not response.relay_state
+    assert response.message == (
+        f'The requested relay_channel {channel} is outside the supported range '
+        f'(0..{len(states) - 1})')
+    logger.warning.assert_called_once_with(f'set_relay: {response.message}')
+    assert port.mock_calls == []
+
+
+def test_set_relay_supports_uint32_channel(relay):
+    """Serialize and accept a channel greater than the former uint8 limit."""
+    node, port = relay
+    node.relay_state_array = [False] * 301
+    request = SetRelay.Request(relay_channel=300, relay_state=True)
+    request = deserialize_message(serialize_message(request), SetRelay.Request)
+
+    response = node.set_relay(request, SetRelay.Response())
+    response = deserialize_message(serialize_message(response), SetRelay.Response)
+
+    assert SetRelay.Request.get_fields_and_field_types()['relay_channel'] == 'uint32'
+    assert SetRelay.Response.get_fields_and_field_types() == {
+        'success': 'boolean',
+        'relay_state': 'boolean',
+        'message': 'string',
+    }
+    assert response.success
+    assert response.relay_state
+    assert response.message == 'Relay 300 has been turned on.'
+    assert node.relay_state_array[300]
+    port.write.assert_called_once_with(b'relay on 300\n\r')
+
+
+@pytest.mark.parametrize('state', [False, True])
+def test_get_relay_returns_tracked_state_without_serial_io(relay, state):
+    """Return the requested cached state and leave the serial port untouched."""
+    node, port = relay
+    node.relay_state_array = [not state, state]
+
+    response = node.get_relay(
+        GetRelay.Request(relay_channel=1), GetRelay.Response())
+
+    assert response.success
+    assert response.relay_state is state
+    assert response.message == f"Relay 1 is {'on' if state else 'off'}."
+    assert port.mock_calls == []
+
+
+@pytest.mark.parametrize('channel,states', [
+    (0, []),
+    (2, [True, False]),
+])
+def test_get_relay_rejects_unsupported_channel(relay, channel, states, monkeypatch):
+    """Return a logged failure consistently without accessing the serial port."""
+    node, port = relay
+    node.relay_state_array = states
+    logger = Mock()
+    monkeypatch.setattr(node, 'get_logger', lambda: logger)
+    response = node.get_relay(
+        GetRelay.Request(relay_channel=channel),
+        GetRelay.Response(success=True, relay_state=True, message='Previous response'),
+    )
+
+    assert not response.success
+    assert not response.relay_state
+    assert response.message == (
+        f'The requested relay_channel {channel} is outside the supported range '
+        f'(0..{len(states) - 1})')
+    logger.warning.assert_called_once_with(f'set_relay: {response.message}')
+    assert port.mock_calls == []
+
+
+def test_get_relay_service_contract_and_registration(relay):
+    """Register GetRelay with the shared uint32-channel response contract."""
+    node, _ = relay
+
+    assert node.service_get_relay.srv_name == 'get_relay'
+    assert node.service_get_relay.srv_type is GetRelay
+    assert GetRelay.Request.get_fields_and_field_types() == {'relay_channel': 'uint32'}
+    assert GetRelay.Response.get_fields_and_field_types() == {
+        'success': 'boolean',
+        'relay_state': 'boolean',
+        'message': 'string',
+    }
+    request = GetRelay.Request(relay_channel=12)
+    request = deserialize_message(serialize_message(request), GetRelay.Request)
+    assert request.relay_channel == 12
 
 
 @pytest.mark.parametrize('kind', ['relay', 'gpio'])
