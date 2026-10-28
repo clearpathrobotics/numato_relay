@@ -38,24 +38,32 @@ from std_msgs.msg import Bool
 class NumatoRelay(Node):
     def __init__(self):
         super().__init__("NumatoRelay")
-        self.service_set_relay = self.create_service(SetRelay, "set_relay", self.set_relay)
-        relay_timer_period = 1.0  # seconds
-        gpio_timer_period = 3.0  # seconds
-        self.relay_timer = self.create_timer(relay_timer_period, self.relay_timer_callback)
-        #self.gpio_timer = self.create_timer(gpio_timer_period, self.gpio_timer_callback)
+
         self.declare_parameter("port", "/dev/ttyACM0")
-        port = self.get_parameter("port").get_parameter_value().string_value
         self.declare_parameter("baud", 19200)
-        baud = self.get_parameter("baud").get_parameter_value().integer_value
-        self.serial_port = serial.Serial(port, baud, timeout=1)
+        self.declare_parameter("relay_timer_period", 1.0)  # seconds
+        self.declare_parameter("gpio_timer_period", 3.0)  # seconds
+
+        self.port = self.get_parameter("port").get_parameter_value().string_value
+        self.baud = self.get_parameter("baud").get_parameter_value().integer_value
+        self.relay_timer_period = self.get_parameter(
+            "relay_timer_period").get_parameter_value().double_value
+        self.gpio_timer_period = self.get_parameter(
+            "gpio_timer_period").get_parameter_value().double_value
+
+        self.serial_port = serial.Serial(self.port, self.baud, timeout=1)
         self.SERIAL_READ_SIZE = 25
         self.serial_lock = Lock()
 
         self.relay_state_array = []
         self.relay_publishers = []
-
         self.gpio_state_array = []
         self.gpio_publishers = []
+
+        self.service_set_relay = self.create_service(SetRelay, "set_relay", self.set_relay)
+        self.relay_timer = self.create_timer(self.relay_timer_period, self.relay_timer_callback)
+        # GPIO polling remains disabled.
+        # self.gpio_timer = self.create_timer(self.gpio_timer_period, self.gpio_timer_callback)
 
 
     def set_relay(self, request, response):

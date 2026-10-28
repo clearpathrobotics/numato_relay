@@ -1,5 +1,7 @@
 """Verify serial read transactions without relay hardware."""
 
+import ast
+import inspect
 from unittest.mock import Mock, call
 
 from numato_relay.numato_relay import NumatoRelay
@@ -14,19 +16,66 @@ from serial import SerialException
 
 
 @pytest.fixture
-def relay(monkeypatch):
+def relay(monkeypatch, request):
     """Create a node with a mocked serial port."""
     port = Mock()
-    monkeypatch.setattr('numato_relay.numato_relay.serial.Serial', Mock(return_value=port))
-    rclpy.init(args=[])
+    serial_constructor = Mock(return_value=port)
+    monkeypatch.setattr('numato_relay.numato_relay.serial.Serial', serial_constructor)
+    rclpy.init(args=getattr(request, 'param', []))
     node = None
     try:
         node = NumatoRelay()
+        node.serial_constructor_mock = serial_constructor
         yield node, port
     finally:
         if node is not None:
             node.destroy_node()
         rclpy.shutdown()
+
+
+@pytest.mark.parametrize('relay,expected', [
+    ([], {
+        'port': '/dev/ttyACM0',
+        'baud': 19200,
+        'relay_timer_period': 1.0,
+        'gpio_timer_period': 3.0,
+    }),
+    ([
+        '--ros-args',
+        '-p', 'port:=/dev/test-relay',
+        '-p', 'baud:=9600',
+        '-p', 'relay_timer_period:=0.5',
+        '-p', 'gpio_timer_period:=4.5',
+    ], {
+        'port': '/dev/test-relay',
+        'baud': 9600,
+        'relay_timer_period': 0.5,
+        'gpio_timer_period': 4.5,
+    }),
+], indirect=['relay'])
+def test_timer_and_serial_parameters(relay, expected):
+    """Cache defaults and startup overrides before creating ROS interfaces."""
+    node, port = relay
+
+    for name, value in expected.items():
+        assert getattr(node, name) == value
+        assert node.get_parameter(name).value == value
+    node.serial_constructor_mock.assert_called_once_with(
+        expected['port'], expected['baud'], timeout=1)
+    assert node.relay_timer.timer_period_ns == int(expected['relay_timer_period'] * 1e9)
+    assert not hasattr(node, 'gpio_timer')
+
+
+def test_parameter_reads_are_confined_to_init():
+    """Keep ROS parameter lookups within the initializer."""
+    source = ast.parse(inspect.getsource(NumatoRelay))
+    for method in source.body[0].body:
+        if not isinstance(method, ast.FunctionDef) or method.name == '__init__':
+            continue
+        for expression in ast.walk(method):
+            if isinstance(expression, ast.Call) and isinstance(expression.func, ast.Attribute):
+                assert expression.func.attr != 'get_parameter', (
+                    f'{method.name} reads parameters outside __init__')
 
 
 def test_serial_query(relay):

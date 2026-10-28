@@ -76,6 +76,21 @@
 
 <br />
 
+### Parameters
+
+| Parameter | Default | Description |
+| --- | --- | --- |
+| `port` | `/dev/ttyACM0` | Serial device path. |
+| `baud` | `19200` | Serial baud rate. |
+| `relay_timer_period` | `1.0` | Relay state publishing period in seconds. |
+| `gpio_timer_period` | `3.0` | GPIO polling/publishing period in seconds. GPIO polling remains disabled. |
+
+Set parameters at startup with `--ros-args -p`, for example:
+
+```
+ros2 run numato_relay service --ros-args -p relay_timer_period:=0.5
+```
+
 ### Controlling a relay
 
 After starting the package per the steps in Running the driver:
