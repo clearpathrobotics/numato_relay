@@ -82,6 +82,7 @@
 | --- | --- | --- |
 | `port` | `/dev/ttyACM0` | Serial device path. |
 | `baud` | `19200` | Serial baud rate. |
+| `toggle_duration` | `2.0` | Seconds to hold the opposite state during a power-cycle request. |
 | `relay_timer_period` | `1.0` | Relay state publishing period in seconds. |
 | `gpio_timer_period` | `3.0` | GPIO polling/publishing period in seconds. GPIO polling remains disabled. |
 
@@ -139,6 +140,26 @@ The response uses the same `success`, `relay_state`, and `message` fields as
 `SetRelay`. The state is driver-tracked, not confirmed by reading back the relay
 hardware. When `success` is false, `relay_state` is a placeholder and must not
 be treated as the physical state.
+
+### Power-cycling a relay
+
+Call `toggle_relay` with the desired final state:
+
+```
+ros2 service call toggle_relay numato_relay_interfaces/srv/ToggleRelay "{relay_channel: 0, relay_state: True}"
+```
+
+If the relay is already in the requested state, it switches to the opposite
+state for `toggle_duration` seconds and then restores the requested state. If
+the relay is not already in that state, it is set directly without a power-cycle.
+`toggle_duration` is configured at startup (default `2.0` seconds), for example
+with `--ros-args -p toggle_duration:=5.0`.
+
+The timed power-cycle blocks the node's executor, pausing other services and
+timer callbacks. Serial failures return `success: false` and an explanatory
+message. In particular, if restoring the state fails, the relay may remain in
+the opposite state; the response's `relay_state` is then a failure placeholder,
+not the physical state.
 
 
 <br />

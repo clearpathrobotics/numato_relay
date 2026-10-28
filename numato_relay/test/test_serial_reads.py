@@ -4,9 +4,9 @@ import ast
 import inspect
 from unittest.mock import Mock, call
 
-from numato_relay.numato_relay import NumatoRelay
+from numato_relay.numato_relay import NumatoRelay, time as relay_time
 
-from numato_relay_interfaces.srv import GetRelay, SetRelay
+from numato_relay_interfaces.srv import GetRelay, SetRelay, ToggleRelay
 
 import pytest
 
@@ -38,6 +38,7 @@ def relay(monkeypatch, request):
     ([], {
         'port': '/dev/ttyACM0',
         'baud': 19200,
+        'toggle_duration': 2.0,
         'relay_timer_period': 1.0,
         'gpio_timer_period': 3.0,
     }),
@@ -45,11 +46,13 @@ def relay(monkeypatch, request):
         '--ros-args',
         '-p', 'port:=/dev/test-relay',
         '-p', 'baud:=9600',
+        '-p', 'toggle_duration:=0.25',
         '-p', 'relay_timer_period:=0.5',
         '-p', 'gpio_timer_period:=4.5',
     ], {
         'port': '/dev/test-relay',
         'baud': 9600,
+        'toggle_duration': 0.25,
         'relay_timer_period': 0.5,
         'gpio_timer_period': 4.5,
     }),
@@ -318,6 +321,97 @@ def test_set_relay_supports_uint32_channel(relay):
     port.write.assert_called_once_with(b'relay on 300\n\r')
 
 
+@pytest.mark.parametrize('initial,desired', [
+    (False, False),
+    (False, True),
+    (True, False),
+    (True, True),
+])
+def test_toggle_relay_semantics(relay, monkeypatch, initial, desired):
+    """Set a differing state directly and power-cycle an already matching state."""
+    node, port = relay
+    node.relay_state_array = [initial]
+    sleep = Mock()
+    monkeypatch.setattr(relay_time, 'sleep', sleep)
+
+    response = node.toggle_relay(
+        ToggleRelay.Request(relay_channel=0, relay_state=desired),
+        ToggleRelay.Response(),
+    )
+
+    assert response.success
+    assert response.relay_state is desired
+    assert node.relay_state_array == [desired]
+    if initial == desired:
+        assert port.write.call_args_list == [
+            call(f"relay {'off' if desired else 'on'} 0\n\r".encode('utf-8')),
+            call(f"relay {'on' if desired else 'off'} 0\n\r".encode('utf-8')),
+        ]
+        assert port.flush.call_count == 2
+        sleep.assert_called_once_with(node.toggle_duration)
+        assert response.message == (
+            f'Relay 0 was already {"on" if desired else "off"}; '
+            f'toggled for {node.toggle_duration:.2f} s and restored.')
+    else:
+        state = 'on' if desired else 'off'
+        port.write.assert_called_once_with(f'relay {state} 0\n\r'.encode('utf-8'))
+        port.flush.assert_called_once_with()
+        sleep.assert_not_called()
+        assert response.message == f'Relay 0 was set to {state}.'
+
+
+@pytest.mark.parametrize('stage', ['write', 'flush'])
+@pytest.mark.parametrize('failed_command', [1, 2])
+def test_toggle_relay_reports_serial_failures(
+        relay, monkeypatch, stage, failed_command):
+    """Report a failed first or restore command and preserve last flushed state."""
+    node, port = relay
+    node.relay_state_array = [True]
+    sleep = Mock()
+    monkeypatch.setattr(relay_time, 'sleep', sleep)
+    logger = Mock()
+    monkeypatch.setattr(node, 'get_logger', lambda: logger)
+    getattr(port, stage).side_effect = (
+        [None] * (failed_command - 1) + [SerialException('Serial failure')])
+
+    response = node.toggle_relay(
+        ToggleRelay.Request(relay_channel=0, relay_state=True),
+        ToggleRelay.Response(success=True, relay_state=True, message='Previous response'),
+    )
+
+    assert not response.success
+    assert not response.relay_state
+    assert response.message == 'Serial communication failed: Serial failure'
+    assert node.relay_state_array == [False if failed_command == 2 else True]
+    assert not node.serial_lock.locked()
+    logger.error.assert_called_once_with(
+        'toggle_relay: relay_channel 0: Serial communication failed: Serial failure')
+    if failed_command == 2:
+        sleep.assert_called_once_with(node.toggle_duration)
+    else:
+        sleep.assert_not_called()
+
+
+def test_toggle_relay_rejects_unsupported_channel(relay, monkeypatch):
+    """Reject unsupported channels without accessing the serial port."""
+    node, port = relay
+    node.relay_state_array = [True]
+    logger = Mock()
+    monkeypatch.setattr(node, 'get_logger', lambda: logger)
+
+    response = node.toggle_relay(
+        ToggleRelay.Request(relay_channel=1, relay_state=True),
+        ToggleRelay.Response(success=True, relay_state=True, message='Previous response'),
+    )
+
+    assert not response.success
+    assert not response.relay_state
+    assert response.message == (
+        'The requested relay_channel 1 is outside the supported range (0..0)')
+    logger.warning.assert_called_once_with(f'toggle_relay: {response.message}')
+    assert port.mock_calls == []
+
+
 @pytest.mark.parametrize('state', [False, True])
 def test_get_relay_returns_tracked_state_without_serial_io(relay, state):
     """Return the requested cached state and leave the serial port untouched."""
@@ -353,7 +447,7 @@ def test_get_relay_rejects_unsupported_channel(relay, channel, states, monkeypat
     assert response.message == (
         f'The requested relay_channel {channel} is outside the supported range '
         f'(0..{len(states) - 1})')
-    logger.warning.assert_called_once_with(f'set_relay: {response.message}')
+    logger.warning.assert_called_once_with(f'get_relay: {response.message}')
     assert port.mock_calls == []
 
 

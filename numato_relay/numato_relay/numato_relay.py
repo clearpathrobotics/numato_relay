@@ -28,8 +28,9 @@
 # POSSIBILITY OF SUCH DAMAGE.
 
 import serial
+import time
 from threading import Lock
-from numato_relay_interfaces.srv import GetRelay, SetRelay
+from numato_relay_interfaces.srv import GetRelay, SetRelay, ToggleRelay
 import rclpy
 from rclpy.node import Node
 from std_msgs.msg import Bool
@@ -41,11 +42,14 @@ class NumatoRelay(Node):
 
         self.declare_parameter("port", "/dev/ttyACM0")
         self.declare_parameter("baud", 19200)
+        self.declare_parameter("toggle_duration", 2.0)  # seconds held in opposite state
         self.declare_parameter("relay_timer_period", 1.0)  # seconds
         self.declare_parameter("gpio_timer_period", 3.0)  # seconds
 
         self.port = self.get_parameter("port").get_parameter_value().string_value
         self.baud = self.get_parameter("baud").get_parameter_value().integer_value
+        self.toggle_duration = self.get_parameter(
+            "toggle_duration").get_parameter_value().double_value
         self.relay_timer_period = self.get_parameter(
             "relay_timer_period").get_parameter_value().double_value
         self.gpio_timer_period = self.get_parameter(
@@ -62,6 +66,8 @@ class NumatoRelay(Node):
 
         self.service_set_relay = self.create_service(SetRelay, "set_relay", self.set_relay)
         self.service_get_relay = self.create_service(GetRelay, "get_relay", self.get_relay)
+        self.service_toggle_relay = self.create_service(
+            ToggleRelay, "toggle_relay", self.toggle_relay)
         self.relay_timer = self.create_timer(self.relay_timer_period, self.relay_timer_callback)
         # GPIO polling remains disabled.
         # self.gpio_timer = self.create_timer(self.gpio_timer_period, self.gpio_timer_callback)
@@ -76,7 +82,7 @@ class NumatoRelay(Node):
             message = (
                 f"Invalid type: relay_channel should be int, got {type(request.relay_channel)}")
             return self.set_relay_error_response(response, message)
-        if not self.validate_relay_channel(request.relay_channel, response):
+        if not self.validate_relay_channel(request.relay_channel, response, "set_relay"):
             return response
 
         channel = request.relay_channel
@@ -93,15 +99,10 @@ class NumatoRelay(Node):
         response.message = f"Relay {channel} has been turned {relay_state}."
 
         try:
-            with self.serial_lock:
-                self.serial_port.write(
-                    f"relay {relay_state} {channel}\n\r".encode("utf-8"))
-                self.serial_port.flush()
-                self.relay_state_array[channel] = request.relay_state
+            self.write_relay(channel, request.relay_state)
         except (serial.SerialException, OSError) as error:
             message = f"Serial communication failed: {error}"
-            self.get_logger().error(
-                f"set_relay: relay_channel {channel}: {message}")
+            self.get_logger().error(f"set_relay: relay_channel {channel}: {message}")
             return self.set_relay_error_response(response, message)
 
         return response
@@ -114,19 +115,65 @@ class NumatoRelay(Node):
         return response
 
 
-    def validate_relay_channel(self, channel, response):
+    def validate_relay_channel(self, channel, response, operation):
         if channel in range(len(self.relay_state_array)):
             return True
         message = (
             f"The requested relay_channel {channel} is outside the supported range "
             f"(0..{len(self.relay_state_array) - 1})")
-        self.get_logger().warning(f"set_relay: {message}")
+        self.get_logger().warning(f"{operation}: {message}")
         self.set_relay_error_response(response, message)
         return False
 
 
+    def toggle_relay(self, request, response):
+        if not isinstance(request.relay_state, bool):
+            message = (
+                f"Invalid type: relay_state should be bool, got {type(request.relay_state)}")
+            return self.set_relay_error_response(response, message)
+        if not isinstance(request.relay_channel, int):
+            message = (
+                f"Invalid type: relay_channel should be int, got {type(request.relay_channel)}")
+            return self.set_relay_error_response(response, message)
+        if not self.validate_relay_channel(request.relay_channel, response, "toggle_relay"):
+            return response
+
+        channel = request.relay_channel
+        desired = request.relay_state
+        try:
+            if self.relay_state_array[channel] == desired:
+                self.write_relay(channel, not desired)
+                # Blocks this node's executor while the relay is power-cycled.
+                time.sleep(max(self.toggle_duration, 0.0))
+                self.write_relay(channel, desired)
+                response.message = (
+                    f"Relay {channel} was already {'on' if desired else 'off'}; "
+                    f"toggled for {self.toggle_duration:.2f} s and restored.")
+            else:
+                self.write_relay(channel, desired)
+                response.message = (
+                    f"Relay {channel} was set to {'on' if desired else 'off'}.")
+        except (serial.SerialException, OSError) as error:
+            message = f"Serial communication failed: {error}"
+            self.get_logger().error(f"toggle_relay: relay_channel {channel}: {message}")
+            return self.set_relay_error_response(response, message)
+
+        response.success = True
+        response.relay_state = self.relay_state_array[channel]
+        return response
+
+
+    def write_relay(self, channel, state):
+        relay_state = "on" if state else "off"
+        with self.serial_lock:
+            self.serial_port.write(
+                f"relay {relay_state} {channel}\n\r".encode("utf-8"))
+            self.serial_port.flush()
+            self.relay_state_array[channel] = state
+
+
     def get_relay(self, request, response):
-        if not self.validate_relay_channel(request.relay_channel, response):
+        if not self.validate_relay_channel(request.relay_channel, response, "get_relay"):
             return response
 
         channel = request.relay_channel
