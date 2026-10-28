@@ -38,7 +38,7 @@ from rclpy.node import Node
 
 class NumatoRelay(Node):
     def __init__(self):
-        super().__init__("NumatoRelay")
+        super().__init__("numato_relay")
 
         self.declare_parameter("port", "/dev/ttyACM0")
         self.declare_parameter("baud", 19200)
@@ -62,12 +62,12 @@ class NumatoRelay(Node):
         self.relay_state_array = []
         self.gpio_state_array = []
 
-        self.relay_publisher = self.create_publisher(RelayStates, "relay_states", 10)
-        self.gpio_publisher = self.create_publisher(GpioStates, "gpio_states", 10)
-        self.service_set_relay = self.create_service(SetRelay, "set_relay", self.set_relay)
-        self.service_get_relay = self.create_service(GetRelay, "get_relay", self.get_relay)
+        self.relay_publisher = self.create_publisher(RelayStates, "~/relay_states", 10)
+        self.gpio_publisher = self.create_publisher(GpioStates, "~/gpio_states", 10)
+        self.service_set_relay = self.create_service(SetRelay, "~/set_relay", self.set_relay)
+        self.service_get_relay = self.create_service(GetRelay, "~/get_relay", self.get_relay)
         self.service_toggle_relay = self.create_service(
-            ToggleRelay, "toggle_relay", self.toggle_relay)
+            ToggleRelay, "~/toggle_relay", self.toggle_relay)
         self.relay_timer = self.create_timer(self.relay_timer_period, self.relay_timer_callback)
         # GPIO polling remains disabled.
         # self.gpio_timer = self.create_timer(self.gpio_timer_period, self.gpio_timer_callback)

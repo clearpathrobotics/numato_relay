@@ -109,7 +109,8 @@ hardware or by another controller.
 **Interface migration:** `relay_channel` changed from `uint8` to `uint32`, and the
 response fields changed from `relay_response_bool`/`relay_response_string` to
 `success`/`relay_state`/`message`. Rebuild the interface package and update and rebuild
-dependent clients to use the new response fields. The service name remains `set_relay`.
+dependent clients to use the new response fields. The service leaf name remains
+`set_relay`; its resolved default name is `/numato_relay/set_relay`.
 
 After starting the package per the steps in Running the driver:
 1.  Open a new terminal.
@@ -119,7 +120,7 @@ After starting the package per the steps in Running the driver:
     ```
 3.  Calling the Service
     ```
-    ros2 service call set_relay numato_relay_interfaces/srv/SetRelay "{relay_channel: 3, relay_state: False}"
+    ros2 service call /numato_relay/set_relay numato_relay_interfaces/srv/SetRelay "{relay_channel: 3, relay_state: False}"
     ```
     
     -   Changing the integer beside `relay_channel:` to match the relay that you want to control.
@@ -133,7 +134,7 @@ Call the `get_relay` service to retrieve the driver's tracked state without
 sending a command to the hardware:
 
 ```
-ros2 service call get_relay numato_relay_interfaces/srv/GetRelay "{relay_channel: 3}"
+ros2 service call /numato_relay/get_relay numato_relay_interfaces/srv/GetRelay "{relay_channel: 3}"
 ```
 
 The response uses the same `success`, `relay_state`, and `message` fields as
@@ -146,7 +147,7 @@ be treated as the physical state.
 Call `toggle_relay` with the desired final state:
 
 ```
-ros2 service call toggle_relay numato_relay_interfaces/srv/ToggleRelay "{relay_channel: 0, relay_state: True}"
+ros2 service call /numato_relay/toggle_relay numato_relay_interfaces/srv/ToggleRelay "{relay_channel: 0, relay_state: True}"
 ```
 
 If the relay is already in the requested state, it switches to the opposite
@@ -166,7 +167,11 @@ not the physical state.
 
 ### Topics and Services
 
-Relay states are published together on `/relay_states` using
+The node is named `numato_relay`. Its private interfaces resolve under
+`/numato_relay/` by default, or under `<namespace>/numato_relay/` when launched
+with a namespace (for example, `/robots/robot1/numato_relay/`).
+
+Relay states are published together on `/numato_relay/relay_states` using
 `numato_relay_interfaces/msg/RelayStates`, which contains:
 
 ```text
@@ -182,22 +187,25 @@ Each entry in the array is a boolean:
 -   True = on = relay closed = relay powered
 -   False = off = relay open = relay not powered
 
-GPIO states are published together on `/gpio_states` using
+GPIO states are published together on `/numato_relay/gpio_states` using
 `numato_relay_interfaces/msg/GpioStates`, also containing `bool[] states`
 indexed by zero-based GPIO channel (`True` = high, `False` = low). The GPIO
 publisher is available, but periodic GPIO polling and publishing remains
 disabled in this step.
 
-**Topic migration:** The per-channel `/numato_relay_state_N` and
+**Topic and name migration:** The per-channel `/numato_relay_state_N` and
 `/numato_gpio_state_N` topics are replaced by the two array topics. Subscribers
-should check the array length and read `states[N]`.
+should check the array length and read `states[N]`. The set/get/toggle service
+leaf names remain the same, but their default resolved names now include the
+`/numato_relay/` prefix. Clients and launch files using old resolved names must
+be updated; private names follow a node namespace automatically.
 
 <br />
 
 Inspect the relay array with:
 
 ```
-ros2 topic echo /relay_states
+ros2 topic echo /numato_relay/relay_states
 ```
 
 <br />

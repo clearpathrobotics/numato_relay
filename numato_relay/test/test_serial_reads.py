@@ -69,10 +69,26 @@ def test_timer_and_serial_parameters(relay, expected):
         expected['port'], expected['baud'], timeout=1)
     assert node.relay_timer.timer_period_ns == int(expected['relay_timer_period'] * 1e9)
     assert not hasattr(node, 'gpio_timer')
-    assert node.relay_publisher.topic_name == '/relay_states'
-    assert node.gpio_publisher.topic_name == '/gpio_states'
     assert node.relay_publisher.msg_type is RelayStates
     assert node.gpio_publisher.msg_type is GpioStates
+
+
+@pytest.mark.parametrize('relay,namespace,prefix', [
+    ([], '/', '/numato_relay'),
+    (['--ros-args', '-r', '__ns:=/robots/robot1'], '/robots/robot1',
+     '/robots/robot1/numato_relay'),
+], indirect=['relay'])
+def test_private_interface_names(relay, namespace, prefix):
+    """Resolve private topics and services under root and node namespaces."""
+    node, _ = relay
+
+    assert node.get_name() == 'numato_relay'
+    assert node.get_namespace() == namespace
+    assert node.resolve_topic_name(node.relay_publisher.topic_name) == f'{prefix}/relay_states'
+    assert node.resolve_topic_name(node.gpio_publisher.topic_name) == f'{prefix}/gpio_states'
+    for service_name in ('set_relay', 'get_relay', 'toggle_relay'):
+        service = getattr(node, f'service_{service_name}')
+        assert node.resolve_service_name(service.srv_name) == f'{prefix}/{service_name}'
 
 
 def test_parameter_reads_are_confined_to_init():
@@ -460,7 +476,8 @@ def test_get_relay_service_contract_and_registration(relay):
     """Register GetRelay with the shared uint32-channel response contract."""
     node, _ = relay
 
-    assert node.service_get_relay.srv_name == 'get_relay'
+    assert node.resolve_service_name(node.service_get_relay.srv_name) == (
+        '/numato_relay/get_relay')
     assert node.service_get_relay.srv_type is GetRelay
     assert GetRelay.Request.get_fields_and_field_types() == {'relay_channel': 'uint32'}
     assert GetRelay.Response.get_fields_and_field_types() == {
