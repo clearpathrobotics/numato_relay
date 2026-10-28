@@ -30,10 +30,10 @@
 import serial
 import time
 from threading import Lock
+from numato_relay_interfaces.msg import GpioStates, RelayStates
 from numato_relay_interfaces.srv import GetRelay, SetRelay, ToggleRelay
 import rclpy
 from rclpy.node import Node
-from std_msgs.msg import Bool
 
 
 class NumatoRelay(Node):
@@ -60,10 +60,10 @@ class NumatoRelay(Node):
         self.serial_lock = Lock()
 
         self.relay_state_array = []
-        self.relay_publishers = []
         self.gpio_state_array = []
-        self.gpio_publishers = []
 
+        self.relay_publisher = self.create_publisher(RelayStates, "relay_states", 10)
+        self.gpio_publisher = self.create_publisher(GpioStates, "gpio_states", 10)
         self.service_set_relay = self.create_service(SetRelay, "set_relay", self.set_relay)
         self.service_get_relay = self.create_service(GetRelay, "get_relay", self.get_relay)
         self.service_toggle_relay = self.create_service(
@@ -205,12 +205,6 @@ class NumatoRelay(Node):
             index_count += 1
 
 
-    def update_relay_publishers(self):
-        number_of_relays = len(self.relay_state_array)
-        for i in range(number_of_relays):
-            self.relay_publishers.append(self.create_publisher(Bool, f'numato_relay_state_{i}', 10))
-
-
     def read_gpio_channel(self, channel):
         """Return the GPIO state, or None when no value is recognized."""
         response = self.serial_query(f"gpio read {channel} \n\r")
@@ -242,37 +236,27 @@ class NumatoRelay(Node):
             self.gpio_state_array[index_count] = state
 
 
-    def update_gpio_publishers(self):
-        number_of_gpio = len(self.gpio_state_array)
-        for i in range(number_of_gpio):
-            self.gpio_publishers.append(self.create_publisher(Bool, f"numato_gpio_state_{i}", 10))
-
-
     def relay_timer_callback(self):
-        for i, pub in enumerate(self.relay_publishers):
-            msg = Bool()
-            msg.data = self.relay_state_array[i]
-            pub.publish(msg)
-            self.get_logger().info(f"Publishing relay {i}: '{msg.data}'")
+        msg = RelayStates()
+        msg.states = list(self.relay_state_array)
+        self.relay_publisher.publish(msg)
+        self.get_logger().debug(f"Publishing relay states: {msg.states}")
 
 
     def gpio_timer_callback(self):
         self.update_gpio()
 
-        for i, pub in enumerate(self.gpio_publishers):
-            gpio_msg = Bool()
-            gpio_msg.data = self.gpio_state_array[i]
-            pub.publish(gpio_msg)
-            self.get_logger().info(f"Publishing GPIO {i}: '{gpio_msg.data}'")
+        msg = GpioStates()
+        msg.states = list(self.gpio_state_array)
+        self.gpio_publisher.publish(msg)
+        self.get_logger().debug(f"Publishing GPIO states: {msg.states}")
 
 
 def main():
     rclpy.init()
     numato_relay = NumatoRelay()
     numato_relay.read_relay()
-    numato_relay.update_relay_publishers()
     numato_relay.read_gpio()
-    numato_relay.update_gpio_publishers()
     rclpy.spin(numato_relay)
     numato_relay.destroy_node()
     rclpy.shutdown()

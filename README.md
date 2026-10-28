@@ -166,25 +166,39 @@ not the physical state.
 
 ### Topics and Services
 
-A topic is created for each available relay.
-`numato_relay.py` structures 8 publishers, but only publishes the ones that are supported on the connected Numato PCBA.
-So, with a 4 channel PCBA, only topics 0 - 3 will be published.
+Relay states are published together on `/relay_states` using
+`numato_relay_interfaces/msg/RelayStates`, which contains:
 
-Each topic publishes a boolean:
+```text
+bool[] states
+```
+
+The array index is the zero-based relay channel, and the array length is the
+number of relays discovered. For example, a four-channel board may publish
+`states: [true, false, false, true]`. An empty array indicates no relays were
+discovered; there is no hard-coded channel limit in the publisher.
+
+Each entry in the array is a boolean:
 -   True = on = relay closed = relay powered
 -   False = off = relay open = relay not powered
 
+GPIO states are published together on `/gpio_states` using
+`numato_relay_interfaces/msg/GpioStates`, also containing `bool[] states`
+indexed by zero-based GPIO channel (`True` = high, `False` = low). The GPIO
+publisher is available, but periodic GPIO polling and publishing remains
+disabled in this step.
+
+**Topic migration:** The per-channel `/numato_relay_state_N` and
+`/numato_gpio_state_N` topics are replaced by the two array topics. Subscribers
+should check the array length and read `states[N]`.
+
 <br />
 
-The topic names are:
--   `/numato_relay_state_0`
--   `/numato_relay_state_1`
--   `/numato_relay_state_2`
--   `/numato_relay_state_3`
--   `/numato_relay_state_4`
--   `/numato_relay_state_5`
--   `/numato_relay_state_6`
--   `/numato_relay_state_7`
+Inspect the relay array with:
+
+```
+ros2 topic echo /relay_states
+```
 
 <br />
 

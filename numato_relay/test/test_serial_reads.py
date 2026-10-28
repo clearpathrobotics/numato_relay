@@ -6,6 +6,7 @@ from unittest.mock import Mock, call
 
 from numato_relay.numato_relay import NumatoRelay, time as relay_time
 
+from numato_relay_interfaces.msg import GpioStates, RelayStates
 from numato_relay_interfaces.srv import GetRelay, SetRelay, ToggleRelay
 
 import pytest
@@ -68,6 +69,10 @@ def test_timer_and_serial_parameters(relay, expected):
         expected['port'], expected['baud'], timeout=1)
     assert node.relay_timer.timer_period_ns == int(expected['relay_timer_period'] * 1e9)
     assert not hasattr(node, 'gpio_timer')
+    assert node.relay_publisher.topic_name == '/relay_states'
+    assert node.gpio_publisher.topic_name == '/gpio_states'
+    assert node.relay_publisher.msg_type is RelayStates
+    assert node.gpio_publisher.msg_type is GpioStates
 
 
 def test_parameter_reads_are_confined_to_init():
@@ -468,24 +473,34 @@ def test_get_relay_service_contract_and_registration(relay):
     assert request.relay_channel == 12
 
 
-@pytest.mark.parametrize('kind', ['relay', 'gpio'])
-def test_publishers_use_state_lists(relay, monkeypatch, kind):
-    """Create and populate per-channel publishers using the underlying list."""
+@pytest.mark.parametrize('kind,message_type', [
+    ('relay', RelayStates),
+    ('gpio', GpioStates),
+])
+@pytest.mark.parametrize('channel_count', [0, 1, 4, 8, 16])
+def test_state_array_publisher(relay, monkeypatch, kind, message_type, channel_count):
+    """Publish an ordered, serializable snapshot for any number of channels."""
     node, _ = relay
-    states = [True, False, True]
-    setattr(node, f'{kind}_state_array', states)
-    publishers = [Mock() for _ in states]
-    create_publisher = Mock(side_effect=publishers)
-    monkeypatch.setattr(node, 'create_publisher', create_publisher)
-    monkeypatch.setattr(node, 'update_gpio', Mock())
+    states = [index % 2 == 0 for index in range(channel_count)]
+    setattr(node, f'{kind}_state_array', list(states))
+    publisher = Mock()
+    monkeypatch.setattr(node, f'{kind}_publisher', publisher)
+    update_gpio = Mock()
+    monkeypatch.setattr(node, 'update_gpio', update_gpio)
 
-    getattr(node, f'update_{kind}_publishers')()
     getattr(node, f'{kind}_timer_callback')()
 
-    assert getattr(node, f'{kind}_publishers') == publishers
-    assert create_publisher.call_count == len(states)
-    for index, (publisher, state) in enumerate(zip(publishers, states)):
-        assert create_publisher.call_args_list[index].args[1:] == (
-            f'numato_{kind}_state_{index}', 10)
-        publisher.publish.assert_called_once()
-        assert publisher.publish.call_args.args[0].data is state
+    publisher.publish.assert_called_once()
+    message, = publisher.publish.call_args.args
+    assert isinstance(message, message_type)
+    assert list(message.states) == states
+    decoded = deserialize_message(serialize_message(message), message_type)
+    assert list(decoded.states) == states
+
+    if kind == 'gpio':
+        update_gpio.assert_called_once_with()
+    else:
+        update_gpio.assert_not_called()
+
+    getattr(node, f'{kind}_state_array').append(True)
+    assert list(message.states) == states
