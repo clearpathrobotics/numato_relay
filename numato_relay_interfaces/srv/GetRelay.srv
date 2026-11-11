@@ -1,0 +1,6 @@
+uint32 relay_channel
+---
+bool success
+# Driver-tracked state; valid only when success is true.
+bool relay_state
+string message

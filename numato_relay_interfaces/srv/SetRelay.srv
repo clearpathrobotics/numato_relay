@@ -1,5 +1,7 @@
-uint8 relay_channel
+uint32 relay_channel
 bool relay_state
 ---
-bool relay_response_bool
-string relay_response_string
+bool success
+# Driver-tracked state; valid only when success is true.
+bool relay_state
+string message
